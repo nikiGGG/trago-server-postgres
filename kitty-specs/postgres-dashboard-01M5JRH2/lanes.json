@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "mission_slug": "postgres-dashboard-01M5JRH2",
+  "mission_id": "01M5JRH2PV9V9P0JKTAW4T5C1Z",
+  "mission_branch": "kitty/mission-postgres-dashboard-01M5JRH2",
+  "target_branch": "plan/postgres-dashboard",
+  "lanes": [
+    {
+      "lane_id": "lane-a",
+      "wp_ids": [
+        "WP01",
+        "WP03"
+      ],
+      "write_scope": [
+        "statistics/summary.go",
+        "statistics/summary_test.go",
+        "test/db.go",
+        "test/postgres.go"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "dashboard",
+        "legacy-cleanup",
+        "workspace"
+      ],
+      "depends_on_lanes": [],
+      "parallel_group": 0
+    },
+    {
+      "lane_id": "lane-b",
+      "wp_ids": [
+        "WP02"
+      ],
+      "write_scope": [
+        "dashboard/postgres_persistence_test.go",
+        "device/postgres_persistence_test.go",
+        "model/dashboard.go",
+        "model/dashboard_test.go",
+        "model/device.go",
+        "model/device_test.go"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "app-shell",
+        "dashboard",
+        "legacy-cleanup",
+        "workspace"
+      ],
+      "depends_on_lanes": [
+        "lane-a"
+      ],
+      "parallel_group": 1
+    },
+    {
+      "lane_id": "lane-c",
+      "wp_ids": [
+        "WP04"
+      ],
+      "write_scope": [
+        "dashboard/postgres_acceptance_test.go",
+        "statistics/summary2_test.go"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "dashboard",
+        "legacy-cleanup",
+        "workspace"
+      ],
+      "depends_on_lanes": [
+        "lane-a",
+        "lane-b"
+      ],
+      "parallel_group": 2
+    },
+    {
+      "lane_id": "lane-d",
+      "wp_ids": [
+        "WP05"
+      ],
+      "write_scope": [
+        ".github/workflows/build.yml",
+        "Makefile",
+        "hack/test-databases.sh"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "dashboard",
+        "legacy-cleanup",
+        "workspace"
+      ],
+      "depends_on_lanes": [
+        "lane-c"
+      ],
+      "parallel_group": 3
+    },
+    {
+      "lane_id": "lane-e",
+      "wp_ids": [
+        "WP06"
+      ],
+      "write_scope": [
+        "README.md",
+        "docs/postgres-dashboard-rollout.md"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "dashboard",
+        "legacy-cleanup",
+        "workspace"
+      ],
+      "depends_on_lanes": [
+        "lane-d"
+      ],
+      "parallel_group": 4
+    }
+  ],
+  "computed_at": "2026-10-22T21:45:38.416442+00:00",
+  "computed_from": "dependency_graph+ownership",
+  "planning_artifact_wps": [],
+  "planning_commit_sha": "12ea230afc0e62261c1f5bd99d7e039a83e76b0c",
+  "collapse_report": {
+    "events": [
+      {
+        "wp_a": "WP01",
+        "wp_b": "WP03",
+        "rule": "write_scope_overlap",
+        "evidence": "overlapping globs: 'statistics/summary_test.go' vs 'statistics/summary_test.go'; WP03 depends on WP01"
+      }
+    ],
+    "total_merges": 1,
+    "independent_wps_collapsed": 0,
+    "by_rule": {
+      "write_scope_overlap": 1
+    }
+  }
+}

@@ -9,6 +9,6 @@
   "purpose_context": "This mission advances postgres dashboard on master so stakeholders can track the work from mission creation onward.",
   "purpose_tldr": "postgres dashboard",
   "slug": "postgres-dashboard-01M5JRH2",
-  "target_branch": "master",
+  "target_branch": "plan/postgres-dashboard",
   "topology": "single_branch"
 }
