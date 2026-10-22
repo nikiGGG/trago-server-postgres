@@ -1,0 +1,13 @@
+project:
+  uuid: de7867e6-2f5c-4d28-909d-88de18b2f408
+  slug: trago-server-postgres
+  node_id: 635c41590a75
+  build_id: 143c7198-378f-5c94-bf4f-7aef6287edb2
+vcs:
+  type: git
+agents:
+  available:
+  - codex
+  - qwen
+  auto_commit: true
+  lint_on_edit: false
