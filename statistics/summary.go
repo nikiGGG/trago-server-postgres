@@ -14,18 +14,27 @@ import (
 )
 
 // Stats groups the time spans by tag key.
+//
+// The query is assembled from dialect-specific fragments so the same logical
+// statistics query runs on SQLite and PostgreSQL. PostgreSQL needs explicit
+// timestamp typing for the range bounds (VALUES parameters otherwise resolve
+// as text), a different duration expression (ROUND(EXTRACT(EPOCH FROM ...))
+// instead of julianday arithmetic) and a text-normalized range bound so the
+// shared result grouping can parse it. SQLite keeps its original julianday
+// behavior. Every user-supplied value stays bound as a parameter; no user input
+// is concatenated into the SQL.
 func (r *ResolverForStatistics) Stats(ctx context.Context, ranges []*gqlmodel.Range, tags []string, excludeTags []*gqlmodel.InputTimeSpanTag, requireTags []*gqlmodel.InputTimeSpanTag) ([]*gqlmodel.RangedStatisticsEntries, error) {
 	if len(ranges) == 0 {
 		return nil, errors.New("ranges may not be empty")
 	}
 	var variables []interface{}
 	var rangesStrs []string
-	for _, r := range ranges {
-		if r.Start.Time().After(r.End.Time()) {
+	for _, rg := range ranges {
+		if rg.Start.Time().After(rg.End.Time()) {
 			return nil, fmt.Errorf("range start must be before range end")
 		}
-		rangesStrs = append(rangesStrs, "(?, ?)")
-		variables = append(variables, r.Start.OmitTimeZone(), r.End.OmitTimeZone())
+		rangesStrs = append(rangesStrs, r.boundRow())
+		variables = append(variables, rg.Start.OmitTimeZone(), rg.End.OmitTimeZone())
 	}
 	queryRanges := strings.Join(rangesStrs, ", ")
 
@@ -39,38 +48,40 @@ func (r *ResolverForStatistics) Stats(ctx context.Context, ranges []*gqlmodel.Ra
 WITH dates(query_start, query_end) AS (
     VALUES %s
 )
-SELECT query_start                       as query_start,
-       query_end                         as query_end,
-       key                               as key,
-       string_value                      as string_value,
-       sum(round((julianday(CASE WHEN end_user_time > query_end THEN query_end ELSE end_user_time END) -
-                  julianday(CASE WHEN start_user_time < query_start THEN query_start ELSE start_user_time END))
-                     * 24 * 60 * 60, 0)) as time_spend_in_seconds
+SELECT %s                                          as query_start,
+       %s                                          as query_end,
+       tst.key                                     as key,
+       tst.string_value                            as string_value,
+       %s                                          as time_spend_in_seconds
 FROM dates
-         JOIN time_span_tags tst
+         CROSS JOIN time_span_tags as tst
          JOIN (
-    SELECT *
-    FROM time_spans tsx
-    WHERE (EXISTS(SELECT tstx.key
+    SELECT tsx.id, tsx.start_user_time, tsx.end_user_time, tsx.user_id
+    FROM time_spans as tsx
+    WHERE (EXISTS(SELECT 1
                   FROM time_span_tags as tstx
                   WHERE (tstx.time_span_id = tsx.id)
                     AND (%s)))
-      AND (NOT EXISTS(SELECT tstx.key
+      AND (NOT EXISTS(SELECT 1
                       FROM time_span_tags as tstx
-                      WHERE (tstx.time_span_id = id)
+                      WHERE (tstx.time_span_id = tsx.id)
                         AND (%s)))
 ) as ts on ts.id = tst.time_span_id
-WHERE (key in (?))
-  AND (user_id = ?)
-  AND (start_user_time <= query_end AND end_user_time >= query_start)
-GROUP BY query_start,
-         key,
-         string_value;
-`, queryRanges, queryRequire, queryExclude)
+WHERE (tst.key in (?))
+  AND (ts.user_id = ?)
+  AND (ts.start_user_time <= dates.query_end AND ts.end_user_time >= dates.query_start)
+GROUP BY dates.query_start,
+         dates.query_end,
+         tst.key,
+         tst.string_value;
+`, queryRanges, r.boundStartExpr(), r.boundEndExpr(), r.durationExpr(), queryRequire, queryExclude)
 	variables = append(variables, tags, auth.GetUser(ctx).ID)
 
 	var entries []statReturn
-	r.DB.Raw(query, variables...).Scan(&entries)
+	queryHandle := r.DB.Raw(query, variables...).Scan(&entries)
+	if err := queryHandle.Error; err != nil {
+		return nil, err
+	}
 
 	statisticsEntries, err := group(entries)
 	if err != nil {
@@ -80,7 +91,67 @@ GROUP BY query_start,
 	statisticsEntries = fillEmptyRanges(ranges, statisticsEntries)
 	fillEmptyTags(statisticsEntries)
 
-	return statisticsEntries, r.DB.Error
+	return statisticsEntries, nil
+}
+
+// isPostgres reports whether the active database is PostgreSQL. All other
+// dialects (notably SQLite) use the original julianday-based fragments.
+func (r *ResolverForStatistics) isPostgres() bool {
+	return r.DB.Dialect().GetName() == "postgres"
+}
+
+// boundRow returns one CTE VALUES row for a single query range. PostgreSQL
+// explicitly types the two bound placeholders as "timestamp with time zone"
+// (timestamptz) so the values do not resolve as text, and so the comparison
+// against the local user-time timestamptz columns performs no session-TimeZone
+// coercion. The bound parameter is rg.Start.OmitTimeZone() (a UTC-located
+// absolute instant), which lib/pq encodes with its offset; casting that to
+// timestamptz preserves the absolute instant under any session TimeZone.
+// SQLite keeps the original untyped row.
+func (r *ResolverForStatistics) boundRow() string {
+	if r.isPostgres() {
+		return "(?::timestamptz, ?::timestamptz)"
+	}
+	return "(?, ?)"
+}
+
+// boundStartExpr returns the SQL expression producing the range start as the
+// text form the shared result grouping parses. PostgreSQL timestamps scan back
+// as RFC3339 (with a 'T' separator), which the grouping layout cannot parse, so
+// the bound is normalized to the same 'YYYY-MM-DD HH24:MI:SS+00:00' text that
+// SQLite returns for the raw bound parameter. The bound is now a timestamptz,
+// so AT TIME ZONE 'UTC' is required to render its wall-clock in UTC; the
+// user-time values carry no real timezone and are interpreted as UTC, so
+// '+00:00' is appended literally.
+func (r *ResolverForStatistics) boundStartExpr() string {
+	if r.isPostgres() {
+		return `(to_char(dates.query_start AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') || '+00:00')`
+	}
+	return "dates.query_start"
+}
+
+// boundEndExpr is the equivalent of boundStartExpr for the range end.
+func (r *ResolverForStatistics) boundEndExpr() string {
+	if r.isPostgres() {
+		return `(to_char(dates.query_end AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') || '+00:00')`
+	}
+	return "dates.query_end"
+}
+
+// durationExpr returns the per-span duration expression used inside sum(). It
+// clips each span to the requested range, then rounds the whole-second duration
+// per span before summation. PostgreSQL computes the clipped interval in seconds
+// with ROUND(EXTRACT(EPOCH FROM ...)); SQLite keeps the original rounded
+// julianday arithmetic. Both round each span to whole seconds before summing.
+func (r *ResolverForStatistics) durationExpr() string {
+	if r.isPostgres() {
+		return `sum(round(extract(epoch from ` +
+			`((CASE WHEN ts.end_user_time > dates.query_end THEN dates.query_end ELSE ts.end_user_time END) ` +
+			`- (CASE WHEN ts.start_user_time < dates.query_start THEN dates.query_start ELSE ts.start_user_time END)))))`
+	}
+	return `sum(round((julianday(CASE WHEN ts.end_user_time > dates.query_end THEN dates.query_end ELSE ts.end_user_time END) - ` +
+		`julianday(CASE WHEN ts.start_user_time < dates.query_start THEN dates.query_start ELSE ts.start_user_time END)) ` +
+		`* 24 * 60 * 60, 0))`
 }
 
 func fillEmptyTags(statisticsEntries []*gqlmodel.RangedStatisticsEntries) {
@@ -160,7 +231,16 @@ func group(entries []statReturn) ([]*gqlmodel.RangedStatisticsEntries, error) {
 		result = append(result, value)
 	}
 
-	sort.SliceStable(result, func(i, j int) bool { return result[i].Start.Time().Before(result[j].End.Time()) })
+	// Order by range start, then range end. A plain "Start before End"
+	// comparison is not a strict ordering and misbehaves when two requested
+	// ranges share the same start (different ends), which the shared grouping
+	// and zero-fill rely on.
+	sort.SliceStable(result, func(i, j int) bool {
+		if !result[i].Start.Time().Equal(result[j].Start.Time()) {
+			return result[i].Start.Time().Before(result[j].Start.Time())
+		}
+		return result[i].End.Time().Before(result[j].End.Time())
+	})
 	return result, nil
 }
 

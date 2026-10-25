@@ -60,3 +60,31 @@ may be able to read it. Have a look at our [Install Guide](https://traggo.net/in
 ## Versioning
 We use [SemVer](http://semver.org/) for versioning. For the versions available, see the
 [tags on this repository](https://github.com/traggo/server/tags).
+
+## PostgreSQL support
+
+Dashboard statistics, tables and charts work against PostgreSQL 17 (CNPG) in
+addition to the default SQLite backend.
+
+* **SQLite remains the default.** No configuration or schema change is needed
+  for existing SQLite installations.
+* **Enable PostgreSQL** by setting the database dialect and connection string:
+  ```
+  TRAGGO_DATABASE_DIALECT=postgres
+  TRAGGO_DATABASE_CONNECTION=host=<host> port=5432 user=<user> dbname=<dbname> sslmode=<mode> password=<password>
+  ```
+  `TRAGGO_DATABASE_CONNECTION` accepts a lib/pq DSN (URL or keyword/value form).
+  Provide real credentials at runtime; do not reuse the disposable test DSNs.
+* **text and legacy bytea compatibility.** The enum columns
+  (`dashboard_entries.type`, `dashboard_entries.interval`, `devices.type`) are
+  read and written both as normal `text` and as the legacy `bytea` workaround
+  representation. **No automatic column conversion is performed or required.**
+* **Local user-time semantics.** Durations are computed in the stored local
+  wall-clock terms, clipped to each requested range, rounded to whole seconds
+  per span before summation, and are independent of the PostgreSQL session
+  TimeZone. Running spans remain excluded; a completed span crossing a day
+  boundary contributes only its overlap to each requested day.
+
+See [docs/postgres-dashboard-rollout.md](docs/postgres-dashboard-rollout.md) for
+the full configuration, image release, Kubernetes manifest change, staging
+acceptance and rollback runbook (FR-008).

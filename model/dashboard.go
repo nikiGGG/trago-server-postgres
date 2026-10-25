@@ -2,7 +2,37 @@ package model
 
 import (
 	"database/sql/driver"
+	"errors"
 	"fmt"
+)
+
+// scanStringEnum scans a database value into a string-backed enum field. It
+// accepts the two representations used by the supported engines: a Go string
+// (PostgreSQL text columns, SQLite) and a byte slice (PostgreSQL legacy bytea
+// columns, lib/pq). nil and any other driver type produce a descriptive error
+// so that a NULL/unsupported cell can never silently become a wrong value.
+func scanStringEnum(name string, out *string, value interface{}) error {
+	switch v := value.(type) {
+	case nil:
+		return fmt.Errorf("%s: cannot scan NULL (nil value)", name)
+	case string:
+		*out = v
+		return nil
+	case []byte:
+		*out = string(v)
+		return nil
+	default:
+		return fmt.Errorf("%s: unsupported value type %T (%#v), expected string or []byte", name, value, value)
+	}
+}
+
+// Enum scan errors surfaced for nil input, matching the documented FR-005
+// contract ("establish and test nil handling").
+var (
+	// ErrDashboardTypeNil is returned when a NULL dashboard type is scanned.
+	ErrDashboardTypeNil = errors.New("dashboard type: cannot scan NULL (nil value)")
+	// ErrIntervalNil is returned when a NULL interval is scanned.
+	ErrIntervalNil = errors.New("interval: cannot scan NULL (nil value)")
 )
 
 // DashboardRange a named range of a dashboard.
@@ -60,12 +90,11 @@ func (t DashboardType) Value() (driver.Value, error) {
 
 // Scan for db
 func (t *DashboardType) Scan(value interface{}) error {
-	s, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("expected string but was %#v", value)
+	if value == nil {
+		return ErrDashboardTypeNil
 	}
-	*t = DashboardType(s)
-	return nil
+	s := (*string)(t)
+	return scanStringEnum("dashboard type", s, value)
 }
 
 // Interval the interval in which the diagram data should be grouped.
@@ -78,12 +107,11 @@ func (t Interval) Value() (driver.Value, error) {
 
 // Scan for db
 func (t *Interval) Scan(value interface{}) error {
-	s, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("expected string but was %#v", value)
+	if value == nil {
+		return ErrIntervalNil
 	}
-	*t = Interval(s)
-	return nil
+	s := (*string)(t)
+	return scanStringEnum("interval", s, value)
 }
 
 // No lint errors please.

@@ -2,12 +2,69 @@ package test
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 	"github.com/traggo/server/database"
 	"github.com/traggo/server/model"
 )
+
+// PostgreSQL-backed tests (see postgres.go) are opt-in. They only run when a
+// disposable test DSN is configured through PostgresConfigFromEnv. The DSN must
+// point at a test-only PostgreSQL server; the harness never connects to the
+// database named in the DSN for fixtures - it only uses that maintenance
+// connection to CREATE/DROP a brand-new random database per test.
+
+// Environment variables controlling the PostgreSQL test harness.
+const (
+	// PostgresDSNEnv holds a lib/pq connection string to a disposable, test-only
+	// PostgreSQL server. When non-empty, PostgreSQL-backed suites execute
+	// instead of skipping. Example:
+	//   postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable
+	// The database named in the DSN (commonly "postgres") is used only as a
+	// maintenance target to run CREATE DATABASE / DROP DATABASE. Never point
+	// this at a production or shared database.
+	PostgresDSNEnv = "TRAGGO_TEST_POSTGRES_DSN"
+	// PostgresRequiredEnv, when set to a truthy value (1/true/yes/on), turns a
+	// missing TRAGGO_TEST_POSTGRES_DSN (or zero executed PostgreSQL tests) into
+	// a hard failure instead of a skip. Intended for CI so that the PostgreSQL
+	// job cannot silently pass without running real fixtures.
+	PostgresRequiredEnv = "TRAGGO_TEST_POSTGRES_REQUIRED"
+)
+
+// PostgresConfig holds the configuration for a disposable PostgreSQL test run.
+type PostgresConfig struct {
+	// BaseDSN is the disposable server DSN from PostgresDSNEnv (empty if unset).
+	BaseDSN string
+	// Required mirrors PostgresRequiredEnv: absence becomes failure not skip.
+	Required bool
+}
+
+// PostgresConfigFromEnv reads the PostgreSQL test configuration from the
+// environment. It never returns a production default - an unset DSN means the
+// PostgreSQL suite is simply unavailable (Enabled() == false).
+func PostgresConfigFromEnv() PostgresConfig {
+	return PostgresConfig{
+		BaseDSN:  strings.TrimSpace(os.Getenv(PostgresDSNEnv)),
+		Required: envTruthy(PostgresRequiredEnv),
+	}
+}
+
+// Enabled reports whether a disposable PostgreSQL test DSN is configured.
+func (c PostgresConfig) Enabled() bool {
+	return c.BaseDSN != ""
+}
+
+func envTruthy(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
 
 // InMemoryDB create a in memory database for testing.
 func InMemoryDB(t assert.TestingT) *Database {

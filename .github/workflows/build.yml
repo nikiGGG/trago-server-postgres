@@ -28,3 +28,54 @@ jobs:
         run: make release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Dedicated, REQUIRED PostgreSQL 17 job (FR-007 / WP05).
+  #
+  # The `build` job above still covers SQLite (and the full pipeline). This job
+  # is the mandatory PostgreSQL gate: it runs the exact same cross-database
+  # regression/acceptance fixtures (statistics incl. session-TZ, model,
+  # dashboard incl. text/bytea, device, acceptance) against a disposable
+  # PostgreSQL 17 service AND SQLite in a single invocation, with WP01's
+  # required-mode enabled. A missing/unusable connection, a failed harness
+  # setup, or any skipped PostgreSQL suite makes the job FAIL - a green job can
+  # never be SQLite-only.
+  postgres-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # PostgreSQL 17 with a lib/pq-compatible host authentication method.
+        # lib/pq v1.0.0 (pinned in go.mod) does not implement PostgreSQL's
+        # default SCRAM-SHA-256 authentication (the default since PG15), so the
+        # service uses `trust` auth. Never use trust authentication on a real
+        # database.
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 1.25.x
+      - uses: actions/checkout@v5
+      # Install the Go code-generation tool (gqlgen). UI tooling is not needed
+      # here: this job only runs the backend database suites.
+      - run: make download-tools
+      - run: make install-go
+      # Generate GraphQL sources before running the backend tests.
+      - run: make generate-go
+      - name: Run SQLite + PostgreSQL regression/acceptance suites (required)
+        run: make test-postgres
+        env:
+          # Points at the disposable service container; the named database is
+          # used only as a maintenance target to CREATE/DROP an isolated
+          # database per test. Never point this at a production database.
+          TRAGGO_TEST_POSTGRES_DSN: postgres://postgres@localhost:5432/postgres?sslmode=disable
+          # Required-mode (WP01/T018): absence of a usable DSN or any skipped
+          # PostgreSQL suite becomes a hard failure, never a skip.
+          TRAGGO_TEST_POSTGRES_REQUIRED: "1"

@@ -3,9 +3,11 @@ package model
 import (
 	"database/sql/driver"
 	"errors"
-	"fmt"
 	"time"
 )
+
+// ErrDeviceTypeNil is returned when a NULL device type is scanned.
+var ErrDeviceTypeNil = errors.New("device type: cannot scan NULL (nil value)")
 
 // Device represents something which can connect to traggo
 type Device struct {
@@ -28,12 +30,11 @@ func (t DeviceType) Value() (driver.Value, error) {
 
 // Scan for db
 func (t *DeviceType) Scan(value interface{}) error {
-	s, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("expected []byte but was %#v", value)
+	if value == nil {
+		return ErrDeviceTypeNil
 	}
-	*t = DeviceType(s)
-	return nil
+	s := (*string)(t)
+	return scanStringEnum("device type", s, value)
 }
 
 // Seconds returns the amount of seconds after the device expires.

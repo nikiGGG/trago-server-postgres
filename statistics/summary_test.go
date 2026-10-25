@@ -1,9 +1,11 @@
 package statistics
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/require"
 	"github.com/traggo/server/generated/gqlmodel"
 	"github.com/traggo/server/model"
@@ -19,10 +21,18 @@ func TestSummary_fails(t *testing.T) {
 
 	_, err := resolver.Stats(fake.User(1), []*gqlmodel.Range{rangex("2019-06-11T10:00:00Z", "2019-06-11T09:00:00Z")}, []string{"type"}, nil, nil)
 	require.Error(t, err, "range start must be before range end ")
+
+	// empty range list must be an error, not an empty result
+	_, err = resolver.Stats(fake.User(1), []*gqlmodel.Range{}, []string{"type"}, nil, nil)
+	require.Error(t, err, "ranges may not be empty")
 }
 
-func TestStats(t *testing.T) {
-	data := []*testEntry{
+// statsFixtures returns the shared statistics fixtures. The exact same set is
+// run against SQLite (TestStats) and, when a disposable PostgreSQL DSN is
+// configured, against PostgreSQL 17 (TestStats_postgres). Expected values are
+// identical for both engines.
+func statsFixtures() []*testEntry {
+	return []*testEntry{
 		name("simple").
 			Load(ts("2019-06-11T10:00:00Z", 10*time.Second, tag("type", "review"))).
 			Keys("type").
@@ -204,19 +214,198 @@ func TestStats(t *testing.T) {
 					entry("type", "review", 77*time.Second),
 					entry("type", "support", 12*time.Second),
 					entry("type", "work", 18*time.Second))),
+		// ---- T003 boundary characterization (same on SQLite and PostgreSQL) ----
+		name("equal range").
+			Load(ts("2019-06-11T10:00:00Z", 10*time.Second, tag("type", "review"))).
+			Keys("type").
+			Ranges(rangex("2019-06-11T10:00:00Z", "2019-06-11T10:00:00Z")).
+			Expected(
+				result("2019-06-11T10:00:00Z", "2019-06-11T10:00:00Z",
+					entry("type", "review", 0*time.Second))),
+		name("empty keys").
+			Load(ts("2019-06-11T10:00:00Z", 10*time.Second, tag("type", "review"))).
+			Keys().
+			Ranges(rangex("2019-06-11T10:00:00Z", "2019-06-11T10:00:10Z")).
+			Expected(
+				result("2019-06-11T10:00:00Z", "2019-06-11T10:00:10Z", []*gqlmodel.StatisticsEntry{}...)),
+		name("active span excluded").
+			Load(active("2019-06-11T10:00:00Z", tag("type", "review"))).
+			Keys("type").
+			Ranges(rangex("2019-06-11T10:00:00Z", "2019-06-11T10:00:10Z")).
+			Expected(
+				result("2019-06-11T10:00:00Z", "2019-06-11T10:00:10Z", []*gqlmodel.StatisticsEntry{}...)),
+		name("fractional rounding 0.4s -> 0").
+			Load(ts("2019-06-11T10:00:00.600Z", 400*time.Millisecond, tag("type", "review"))).
+			Keys("type").
+			Ranges(rangex("2019-06-11T10:00:00Z", "2019-06-11T10:00:01Z")).
+			Expected(
+				result("2019-06-11T10:00:00Z", "2019-06-11T10:00:01Z",
+					entry("type", "review", 0*time.Second))),
+		name("fractional rounding 0.8s -> 1").
+			Load(ts("2019-06-11T10:00:00.200Z", 800*time.Millisecond, tag("type", "review"))).
+			Keys("type").
+			Ranges(rangex("2019-06-11T10:00:00Z", "2019-06-11T10:00:01Z")).
+			Expected(
+				result("2019-06-11T10:00:00Z", "2019-06-11T10:00:01Z",
+					entry("type", "review", 1*time.Second))),
+		// ---- WP03/T012 additional regression cases (same on both engines) ----
+		// Two requested ranges share the same start but have different ends.
+		// Grouping must keep them as separate ranges (group by query_end too),
+		// not merge them into a single summed row.
+		name("same start different end").
+			Load(ts("2019-06-11T10:00:00Z", 10*time.Second, tag("type", "review"))).
+			Keys("type").
+			Ranges(
+				rangex("2019-06-11T10:00:00Z", "2019-06-11T10:00:05Z"),
+				rangex("2019-06-11T10:00:00Z", "2019-06-11T10:00:10Z")).
+			Expected(
+				result("2019-06-11T10:00:00Z", "2019-06-11T10:00:05Z",
+					entry("type", "review", 5*time.Second)),
+				result("2019-06-11T10:00:00Z", "2019-06-11T10:00:10Z",
+					entry("type", "review", 10*time.Second))),
+		// Another user's identical span must not leak into user 1's statistics.
+		name("user isolation").
+			Load(
+				ts("2019-06-11T10:00:00Z", 10*time.Second, tag("type", "review")),
+				tsForUser(2, "2019-06-11T10:00:00Z", 10*time.Second, tag("type", "review")),
+			).Keys("type").
+			Ranges(rangex("2019-06-11T10:00:00Z", "2019-06-11T10:00:10Z")).
+			Expected(
+				result("2019-06-11T10:00:00Z", "2019-06-11T10:00:10Z",
+					entry("type", "review", 10*time.Second))),
+		// Exclude wins when the same span matches both Include and Exclude.
+		name("exclude precedence").
+			Load(ts("2019-06-11T10:00:00Z", 10*time.Second, tag("type", "review"), tag("issue", "13"))).
+			Keys("type").
+			Include(tag("issue", "13")).
+			Exclude(tag("issue", "13")).
+			Ranges(rangex("2019-06-11T10:00:00Z", "2019-06-11T10:00:10Z")).
+			Expected(
+				result("2019-06-11T10:00:00Z", "2019-06-11T10:00:10Z", []*gqlmodel.StatisticsEntry{}...)),
 	}
+}
 
+// dbFactory opens a fresh, isolated database (either SQLite in-memory or a
+// disposable PostgreSQL database) for one fixture run and returns a cleanup
+// function that closes the connection and destroys the database.
+type dbFactory func(t *testing.T) (*gorm.DB, func())
+
+// TestStats runs the shared statistics fixtures against SQLite. This is the
+// default, always-executed path and must stay green.
+func TestStats(t *testing.T) {
+	runStatsSuite(t, func(t *testing.T) (*gorm.DB, func()) {
+		db := test.InMemoryDB(t)
+		return db.DB, func() { db.Close() }
+	}, statsFixtures(), "")
+}
+
+// TestStats_postgres runs the identical statistics fixtures against a disposable
+// PostgreSQL database. It is OPT-IN: it only executes when TRAGGO_TEST_POSTGRES_DSN
+// is set, otherwise it skips cleanly. The session TimeZone is left at the server
+// default (typically UTC), which is the path the previous WP03 submission was
+// verified on.
+//
+// This is a PASSING regression for the reported PostgreSQL dashboard failure
+// (WP03): before the fix the same suite reproduced `pq: syntax error at or near
+// "WHERE"`. Now the dialect-portable query runs and returns the same expected
+// values as SQLite. In CI, set TRAGGO_TEST_POSTGRES_REQUIRED=1 so an absent DSN
+// is a failure.
+func TestStats_postgres(t *testing.T) {
+	cfg := test.PostgresConfigFromEnv()
+	open := func(t *testing.T) (*gorm.DB, func()) {
+		pdb := test.NewPostgresDB(t, cfg)
+		return pdb.DB, func() { pdb.Close() }
+	}
+	// NewPostgresDB handles skip-or-fail when no DSN is configured.
+	runStatsSuite(t, open, statsFixtures(), "")
+}
+
+// TestStats_postgres_sessionTimeZone is the FR-002 / plan-test-matrix regression
+// for PostgreSQL session-TimeZone independence (WP03 review Issue 1/2). It runs
+// the exact same shared statistics fixtures as the UTC path, but with the
+// session TimeZone forced to a large non-UTC offset (Asia/Yekaterinburg, +05).
+//
+// Before the fix the CTE range bounds were cast to `timestamp without time
+// zone`, so PostgreSQL coerced them to timestamptz using the session TimeZone
+// and shifted the effective range by +5h, returning empty/incorrect statistics.
+// With the bounds now typed `timestamptz` (matching the start_user_time /
+// end_user_time columns) the results are identical to UTC: this test asserts the
+// same fixed expected seconds and would fail on the pre-fix code.
+//
+// This is an OPT-IN PostgreSQL test, gated exactly like TestStats_postgres.
+func TestStats_postgres_sessionTimeZone(t *testing.T) {
+	cfg := test.PostgresConfigFromEnv()
+	open := func(t *testing.T) (*gorm.DB, func()) {
+		pdb := test.NewPostgresDB(t, cfg)
+		return pdb.DB, func() { pdb.Close() }
+	}
+	// NewPostgresDB handles skip-or-fail when no DSN is configured.
+	runStatsSuite(t, open, statsFixtures(), "Asia/Yekaterinburg")
+}
+
+// TestStats_errorPropagation verifies FR-004: a real SQL execution failure
+// surfaces as a resolver error instead of successful empty statistics. The
+// time_spans table is dropped after a successful fixture setup so the statistics
+// query fails at execution time, not during seeding.
+func TestStats_errorPropagation(t *testing.T) {
+	db := test.InMemoryDB(t)
+	defer db.Close()
+
+	require.NoError(t, db.Create(&model.User{ID: 1, Name: "u1", Pass: []byte{1, 2, 3}}).Error)
+
+	resolver := ResolverForStatistics{DB: db.DB}
+
+	// Force a genuine execution-time failure by removing the table the query
+	// reads from. This happens after fixture setup, so the error is not an
+	// artifact of broken seeding.
+	require.NoError(t, db.Exec("DROP TABLE time_spans").Error)
+
+	_, err := resolver.Stats(fake.User(1), []*gqlmodel.Range{rangex("2019-06-11T10:00:00Z", "2019-06-11T10:00:10Z")}, []string{"type"}, nil, nil)
+	require.Error(t, err, "a failed statistics query must return a resolver error, not empty statistics")
+}
+
+// runStatsSuite seeds and asserts every fixture on the database provided by
+// open. When sessionTZ is non-empty (PostgreSQL only), it is applied to the
+// session before the fixtures run so the same expectations can be asserted
+// under a non-UTC session TimeZone. Fixture write errors fail the subtest
+// immediately so a failed insert can never masquerade as an empty result.
+func runStatsSuite(t *testing.T, open dbFactory, data []*testEntry, sessionTZ string) {
 	for _, entry := range data {
+		entry := entry
 		t.Run(entry.name, func(t *testing.T) {
-			db := test.InMemoryDB(t)
-			defer db.Close()
+			db, cleanup := open(t)
+			defer cleanup()
 
-			db.User(1)
-			for _, timespan := range entry.timespans {
-				db.Create(&timespan)
+			if sessionTZ != "" {
+				// SET TIME ZONE accepts a literal name, not a bind parameter
+				// (PostgreSQL rejects "SET TIME ZONE $1"). The value is always a
+				// fixed constant from the test body, never user input, and timezone
+				// names cannot contain a single quote, so inlining in single quotes
+				// is safe.
+				if err := db.Exec("SET TIME ZONE '" + sessionTZ + "'").Error; err != nil {
+					t.Fatalf("set session time zone %q for %q: %v", sessionTZ, entry.name, err)
+				}
 			}
 
-			resolver := ResolverForStatistics{DB: db.DB}
+			// Seed a user for every UserID referenced by the fixture, plus
+			// user 1 always (the resolver runs as user 1). User isolation is
+			// asserted by fixtures that also load another user's spans.
+			userIDs := map[int]struct{}{1: {}}
+			for _, timespan := range entry.timespans {
+				userIDs[timespan.UserID] = struct{}{}
+			}
+			for id := range userIDs {
+				if err := db.Create(&model.User{ID: id, Name: fmt.Sprintf("test%d", id), Pass: []byte{1, 2, 3}}).Error; err != nil {
+					t.Fatalf("seed user %d for %q: %v", id, entry.name, err)
+				}
+			}
+			for _, timespan := range entry.timespans {
+				if err := db.Create(&timespan).Error; err != nil {
+					t.Fatalf("seed time span for %q: %v", entry.name, err)
+				}
+			}
+
+			resolver := ResolverForStatistics{DB: db}
 
 			stats, err := resolver.Stats(fake.User(1), entry.ranges, entry.keys, entry.exclude, entry.include)
 			require.NoError(t, err)
@@ -231,6 +420,29 @@ func ts(start string, d time.Duration, tags ...model.TimeSpanTag) model.TimeSpan
 	return model.TimeSpan{
 		StartUserTime: test.Time(start),
 		EndUserTime:   &end,
+		UserID:        1,
+		Tags:          tags,
+	}
+}
+
+// tsForUser builds a completed time span owned by an arbitrary user, so user
+// isolation can be exercised in the shared fixtures.
+func tsForUser(userID int, start string, d time.Duration, tags ...model.TimeSpanTag) model.TimeSpan {
+	end := test.Time(start).Add(d)
+	return model.TimeSpan{
+		StartUserTime: test.Time(start),
+		EndUserTime:   &end,
+		UserID:        userID,
+		Tags:          tags,
+	}
+}
+
+// active builds a running time span (no end) for a user. Running spans are
+// expected to be excluded from statistics.
+func active(start string, tags ...model.TimeSpanTag) model.TimeSpan {
+	return model.TimeSpan{
+		StartUserTime: test.Time(start),
+		EndUserTime:   nil,
 		UserID:        1,
 		Tags:          tags,
 	}

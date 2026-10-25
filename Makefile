@@ -47,6 +47,21 @@ test-js:
 
 test: test-go test-js
 
+# test-postgres runs the shared cross-database regression/acceptance fixtures
+# against BOTH SQLite (always executed) and a disposable PostgreSQL server
+# (mandatory, FR-007 / WP05). It mirrors the `postgres-test` job in
+# .github/workflows/build.yml. See hack/test-databases.sh for the environment
+# variables it reads (TRAGGO_TEST_POSTGRES_DSN / TRAGGO_TEST_POSTGRES_REQUIRED /
+# TRAGGO_TEST_PG_IMAGE / TRAGGO_TEST_PG_PORT).
+#
+# Without TRAGGO_TEST_POSTGRES_DSN the script starts a disposable postgres:17
+# container itself; with a DSN it reuses the running server (the CI path).
+# TRAGGO_TEST_POSTGRES_REQUIRED is always forced to 1 so a green run provably
+# executed real PostgreSQL fixtures.
+.PHONY: test-postgres
+test-postgres:
+	./hack/test-databases.sh
+
 install-go:
 	go mod download
 
