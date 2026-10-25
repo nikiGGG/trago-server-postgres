@@ -8,6 +8,9 @@ requirement_refs:
 planning_base_branch: plan/postgres-dashboard
 merge_target_branch: plan/postgres-dashboard
 branch_strategy: Planning artifacts for this mission were generated on plan/postgres-dashboard. During /spec-kitty.implement this WP may branch from a dependency-specific base, but completed changes must merge back into plan/postgres-dashboard unless the human explicitly redirects the landing branch.
+base_branch: kitty/mission-postgres-dashboard-01M5JRH2
+base_commit: 75ae7a88927253743c62f0629bad6d8a7df14721
+created_at: '2026-10-25T13:48:02.340386+00:00'
 subtasks: []
 phase: Phase 5 - Mandatory SQLite and PostgreSQL CI
 history: []
