@@ -67,7 +67,8 @@
       "model": "__resolved_model_absent__",
       "notes": [
         "Ready for review: portable stats query (dialect-specific duration/range typing, explicit CROSS JOIN + ON, qualified columns, GROUP BY both bounds+key+value, error propagation). SQLite + PostgreSQL 18 suites pass all 23 fixtures (exit 0); pre-fix PG failure was 'pq: syntax error at or near WHERE'. go vet/gofmt clean. Commit d73d269.",
-        "Review feedback addressed: bounds cast to timestamptz, TZ-independent output, non-UTC session-TZ regression added"
+        "Review feedback addressed: bounds cast to timestamptz, TZ-independent output, non-UTC session-TZ regression added",
+        "Review passed: session-TZ independence verified (timestamptz bounds + non-UTC regression)"
       ],
       "provider": "__resolved_provider_absent__",
       "review": null,
