@@ -1,19 +1,19 @@
 {
-  "event_count": 30,
-  "last_event_id": "01M5SMZ2M9PMN6QPTCJJDDVAV3",
-  "materialized_at": "2026-10-25T13:45:55.081251+00:00",
+  "event_count": 31,
+  "last_event_id": "01M5SN2EFQ3B1T7ZYDRC30DF8Y",
+  "materialized_at": "2026-10-25T13:47:45.527513+00:00",
   "mission_number": "",
   "mission_slug": "postgres-dashboard-01M5JRH2",
   "mission_type": "software-dev",
   "summary": {
-    "approved": 3,
+    "approved": 4,
     "blocked": 0,
     "canceled": 0,
     "claimed": 0,
     "done": 0,
     "for_review": 0,
     "in_progress": 0,
-    "in_review": 1,
+    "in_review": 0,
     "planned": 2
   },
   "work_packages": {
@@ -113,19 +113,25 @@
       }
     },
     "WP04": {
-      "actor": "qwen",
+      "actor": "user",
       "agent": "qwen",
       "agent_profile": "__resolved_profile_absent__",
       "agent_profile_version": "__resolved_profile_version_absent__",
       "force_count": 0,
-      "lane": "in_review",
-      "last_event_id": "01M5SMZ2M9PMN6QPTCJJDDVAV3",
-      "last_transition_at": "2026-10-25T13:45:55.081251+00:00",
+      "lane": "approved",
+      "last_event_id": "01M5SN2EFQ3B1T7ZYDRC30DF8Y",
+      "last_transition_at": "2026-10-25T13:47:45.527513+00:00",
       "model": "__resolved_model_absent__",
       "notes": [
         "Ready for review: WP04 daily statistics + dashboard acceptance. Added statistics/summary2_test.go (T013 deterministic Cyrillic weekly fixture работа=дом/офис/подработка with independent hand-calc totals; T014 Stats2 Daily on SQLite+PG incl. non-UTC session TimeZone Asia/Yekaterinburg and midnight second-inclusive 1799/1800 vs half-open 1800/1800) and dashboard/postgres_acceptance_test.go (T015 resolver API Table+StackedBarChart/Daily/named range/filters across reconnect on SQLite+PG; FR-001 stats+stats2 GraphQL shapes). Evidence: SQLite suite exit 0; PG suite (TRAGGO_TEST_POSTGRES_REQUIRED=1) exit 0 incl. non-UTC session TZ; go vet clean; gofmt clean. Commit a957d30."
       ],
       "provider": "__resolved_provider_absent__",
+      "review_result": {
+        "feedback_path": "/Users/n.gryaznev/Develop/OTHER/trago-server-postgres/kitty-specs/postgres-dashboard-01M5JRH2/tasks/WP04-daily-dashboard-acceptance/review-cycle-1.md",
+        "reference": "review-cycle://postgres-dashboard-01M5JRH2/WP04-daily-dashboard-acceptance/review-cycle-1.md",
+        "reviewer": "user",
+        "verdict": "approved"
+      },
       "role": "reviewer",
       "shell_pid": 8319,
       "shell_pid_created_at": "1792935952.901668",
