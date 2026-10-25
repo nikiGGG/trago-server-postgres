@@ -1,7 +1,7 @@
 {
-  "event_count": 9,
-  "last_event_id": "01M5SK2XV20EKNEZEQP3X0GGDY",
-  "materialized_at": "2026-10-25T13:13:04.098388+00:00",
+  "event_count": 10,
+  "last_event_id": "01M5SK434N19EEVZPV4BV4G4VC",
+  "materialized_at": "2026-10-25T13:13:42.293648+00:00",
   "mission_number": "",
   "mission_slug": "postgres-dashboard-01M5JRH2",
   "mission_type": "software-dev",
@@ -11,9 +11,9 @@
     "canceled": 0,
     "claimed": 0,
     "done": 0,
-    "for_review": 1,
+    "for_review": 0,
     "in_progress": 0,
-    "in_review": 0,
+    "in_review": 1,
     "planned": 5
   },
   "work_packages": {
@@ -23,14 +23,17 @@
       "agent_profile": "__resolved_profile_absent__",
       "agent_profile_version": "__resolved_profile_version_absent__",
       "force_count": 0,
-      "lane": "for_review",
-      "last_event_id": "01M5SK2XV20EKNEZEQP3X0GGDY",
-      "last_transition_at": "2026-10-25T13:13:04.098388+00:00",
+      "lane": "in_review",
+      "last_event_id": "01M5SK434N19EEVZPV4BV4G4VC",
+      "last_transition_at": "2026-10-25T13:13:42.293648+00:00",
       "model": "__resolved_model_absent__",
+      "notes": [
+        "Ready for review: WP01 cross-db fixtures. test/postgres.go disposable PG17 harness (unique DB/test, fail-fast, cleanup, required-mode env TRAGGO_TEST_POSTGRES_REQUIRED). test/db.go added PostgresConfig helpers. statistics/summary_test.go refactored into shared SQLite+PG suite (statsFixtures+runStatsSuite) with T003 boundary fixtures (equal range, empty keys, active span excluded, fractional rounding). Verified: SQLite suite passes (exit 0); PG18.6 local run reproduces the reported failure 'pq: syntax error at or near WHERE' (TestStats_postgres FAILs, opt-in via TRAGGO_TEST_POSTGRES_DSN); default no-DSN run skips cleanly; required-mode fails without DSN. goimports/vet clean. NOTE: lib/pq pinned v1.0.0 lacks SCRAM, so disposable PG needs md5/cleartext auth; model.All() FK ordering (TagDefinition before User) breaks AutoMigrate on PG - workaround User-first in harness (WP02/T008 relevant). Verified on PG18 not 17 (only 18 image available). Pre-existing repo failure: ui/serve.go missing embedded build dir."
+      ],
       "provider": "__resolved_provider_absent__",
-      "role": "implementer",
-      "shell_pid": 49704,
-      "shell_pid_created_at": "1792932697.208156",
+      "role": "reviewer",
+      "shell_pid": 74271,
+      "shell_pid_created_at": "1792934020.316492",
       "subtasks": {
         "T001": "done",
         "T002": "done",
