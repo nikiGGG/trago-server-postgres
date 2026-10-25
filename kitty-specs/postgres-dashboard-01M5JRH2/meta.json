@@ -10,5 +10,7 @@
   "purpose_tldr": "postgres dashboard",
   "slug": "postgres-dashboard-01M5JRH2",
   "target_branch": "plan/postgres-dashboard",
-  "topology": "single_branch"
+  "topology": "single_branch",
+  "vcs": "git",
+  "vcs_locked_at": "2026-10-25T12:51:41.027176+00:00"
 }
