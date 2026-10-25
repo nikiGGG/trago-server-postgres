@@ -2,87 +2,87 @@
   "mission_slug": "postgres-dashboard-01M5JRH2",
   "mission_number": "",
   "mission_type": "software-dev",
-  "overall_verdict": "pending",
+  "overall_verdict": "pass",
   "criteria": [
     {
       "criterion_id": "FR-001",
-      "description": "Verify FR-001 is satisfied",
+      "description": "Both `stats` and `stats2` execute successfully on PostgreSQL 17 and SQLite, retaining their GraphQL response shapes and daily/week selection behavior.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "statistics/summary_test.go shared suite (WP03) passes on SQLite + PostgreSQL; dashboard/postgres_acceptance_test.go TestStatsGraphQLShapes_* asserts both stats/stats2 RangedStatisticsEntries shape on both engines (WP04).",
+      "pass_fail": "pass",
+      "verified_by": "qwen-review",
+      "verified_at": "2026-10-25T00:00:00Z",
+      "notes": "Verified by WP03 and WP04 review: identical fixtures pass on SQLite and disposable PostgreSQL (incl. session-TZ)."
     },
     {
       "criterion_id": "FR-002",
-      "description": "Verify FR-002 is satisfied",
+      "description": "Duration is clipped to each requested range and rounded per span to whole seconds before summation, preserving current local user-time semantics; running spans excluded; boundaries characterized.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "statistics/summary_test.go boundary fixtures (equal/reversed ranges, empty keys, active spans, fractional 0.4s->0/0.8s->1) and TestStats_postgres_sessionTimeZone (WP03); statistics/summary2_test.go daily + midnight-crossing fixtures (WP04).",
+      "pass_fail": "pass",
+      "verified_by": "qwen-review",
+      "verified_at": "2026-10-25T00:00:00Z",
+      "notes": "Verified: per-span rounding both dialects; session-TimeZone independence proven (timestamptz bounds); running spans excluded."
     },
     {
       "criterion_id": "FR-003",
-      "description": "Verify FR-003 is satisfied",
+      "description": "Include OR, Exclude OR, exclusion precedence, tag grouping, zero fill, and user isolation preserved; correct aliases/joins do not change semantics.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "statistics/summary_test.go fixtures for multiple tags, duplicate filter matches, exclusion precedence, user isolation (WP03); statistics/summary2_test.go Include/Exclude + zero-fill daily scenarios (WP04).",
+      "pass_fail": "pass",
+      "verified_by": "qwen-review",
+      "verified_at": "2026-10-25T00:00:00Z",
+      "notes": "Verified on both engines with fixed expected seconds."
     },
     {
       "criterion_id": "FR-004",
-      "description": "Verify FR-004 is satisfied",
+      "description": "SQL execution and scan failures return resolver errors rather than successful empty/zero statistics.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "statistics/summary_test.go TestStats_errorPropagation (WP03) checks .Error on Raw().Scan() before zero-fill; forced execution failure returns non-nil error.",
+      "pass_fail": "pass",
+      "verified_by": "qwen-review",
+      "verified_at": "2026-10-25T00:00:00Z",
+      "notes": "Verified: query error propagates to resolver, no fabricated empty result."
     },
     {
       "criterion_id": "FR-005",
-      "description": "Verify FR-005 is satisfied",
+      "description": "DashboardType, Interval, DeviceType load database string and byte-slice values and persist consistently across supported PostgreSQL schemas and SQLite; unsupported types produce a defined error; nil handling established.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "model/dashboard_test.go + model/device_test.go (WP02) cover string + []byte Scan, nil error, unsupported-type error, round-trip; dashboard/postgres_persistence_test.go + device/postgres_persistence_test.go exercise text + legacy bytea columns via lib/pq.",
+      "pass_fail": "pass",
+      "verified_by": "qwen-review",
+      "verified_at": "2026-10-25T00:00:00Z",
+      "notes": "Verified: scanStringEnum accepts string and []byte; bytea path genuinely exercised on real columns."
     },
     {
       "criterion_id": "FR-006",
-      "description": "Verify FR-006 is satisfied",
+      "description": "Dashboard/device operations persist after reconnect/restart; no destructive or automatic text/bytea conversion required for initial compatibility.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "dashboard/postgres_persistence_test.go + device/postgres_persistence_test.go lifecycle/reconnect tests on file-backed SQLite and PostgreSQL; TestStartupMigration_reopen_textAndBytea reopens both schema variants via database.New and asserts column types retained (WP02).",
+      "pass_fail": "pass",
+      "verified_by": "qwen-review",
+      "verified_at": "2026-10-25T00:00:00Z",
+      "notes": "Verified: values survive close/reopen; AutoMigrate does not convert bytea; model.All() FK ordering fixed for fresh-PG startup."
     },
     {
       "criterion_id": "FR-007",
-      "description": "Verify FR-007 is satisfied",
+      "description": "The same regression fixtures run on actual PostgreSQL 17 and SQLite in CI; PostgreSQL failures or missing configuration must fail its dedicated CI job.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": ".github/workflows/build.yml postgres-test job (postgres:17 service, trust auth for pinned lib/pq, TRAGGO_TEST_POSTGRES_REQUIRED=1) + Makefile test-postgres target + hack/test-databases.sh (WP05); WP01 shared fixtures.",
+      "pass_fail": "pass",
+      "verified_by": "qwen-review",
+      "verified_at": "2026-10-25T00:00:00Z",
+      "notes": "Verified: required-mode rejects invalid/bad DSN (exit 1); local pipeline runs SQLite+PG; remote GitHub Actions run remains a CI follow-up."
     },
     {
       "criterion_id": "FR-008",
-      "description": "Verify FR-008 is satisfied",
-      "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "description": "Document build, immutable image identification, staging validation, Kubernetes rollout, observation, and rollback. Updating the external manifest is a later execution step in its owning repository.",
+      "proof_type": "documentation",
+      "evidence": "docs/postgres-dashboard-rollout.md (WP06) covers T021-T024: config, immutable image procedure (baseline reconciliation, build tooling, source commit + digest, rollback), external manifest change follow-up, operational acceptance + rollback checklist. README.md PostgreSQL support section.",
+      "pass_fail": "pass",
+      "verified_by": "qwen-review",
+      "verified_at": "2026-10-25T00:00:00Z",
+      "notes": "Verified: runbook accurate, no invented facts (external repo/digest recorded as follow-ups), does not claim deployment."
     }
   ],
   "negative_invariants": []

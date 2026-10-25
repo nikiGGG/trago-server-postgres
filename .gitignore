@@ -49,4 +49,12 @@ __generated__
 .kittify/skills-manifest.json
 .kittify/sync-state.json
 .kittify/workspaces/
+.kittify/preflight-warning.json
+.worktrees/
+access_token.json
+cache_version.json
+config.json
+lock
+refresh.lock
+plugins/
 kitty-ops/ops-index.jsonl
