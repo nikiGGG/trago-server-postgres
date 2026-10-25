@@ -1,6 +1,8 @@
 {
+  "accept_commit": "3faee49e0d4ff4017ea46d0eb667780258c06dcb",
   "acceptance_history": [
     {
+      "accept_commit": "3faee49e0d4ff4017ea46d0eb667780258c06dcb",
       "acceptance_mode": "pr",
       "accepted_at": "2026-10-25T13:59:38.507623+00:00",
       "accepted_by": "qwen",
