@@ -1,7 +1,7 @@
 {
-  "event_count": 11,
-  "last_event_id": "01M5SK8HDG8R3JB9Z7WVXJQEAN",
-  "materialized_at": "2026-10-25T13:16:07.984377+00:00",
+  "event_count": 13,
+  "last_event_id": "01M5SK8ZFAGE7EGBDR0G3ND175",
+  "materialized_at": "2026-10-25T13:16:22.378318+00:00",
   "mission_number": "",
   "mission_slug": "postgres-dashboard-01M5JRH2",
   "mission_type": "software-dev",
@@ -12,9 +12,9 @@
     "claimed": 0,
     "done": 0,
     "for_review": 0,
-    "in_progress": 0,
+    "in_progress": 1,
     "in_review": 0,
-    "planned": 5
+    "planned": 4
   },
   "work_packages": {
     "WP01": {
@@ -28,7 +28,8 @@
       "last_transition_at": "2026-10-25T13:16:07.984377+00:00",
       "model": "__resolved_model_absent__",
       "notes": [
-        "Ready for review: WP01 cross-db fixtures. test/postgres.go disposable PG17 harness (unique DB/test, fail-fast, cleanup, required-mode env TRAGGO_TEST_POSTGRES_REQUIRED). test/db.go added PostgresConfig helpers. statistics/summary_test.go refactored into shared SQLite+PG suite (statsFixtures+runStatsSuite) with T003 boundary fixtures (equal range, empty keys, active span excluded, fractional rounding). Verified: SQLite suite passes (exit 0); PG18.6 local run reproduces the reported failure 'pq: syntax error at or near WHERE' (TestStats_postgres FAILs, opt-in via TRAGGO_TEST_POSTGRES_DSN); default no-DSN run skips cleanly; required-mode fails without DSN. goimports/vet clean. NOTE: lib/pq pinned v1.0.0 lacks SCRAM, so disposable PG needs md5/cleartext auth; model.All() FK ordering (TagDefinition before User) breaks AutoMigrate on PG - workaround User-first in harness (WP02/T008 relevant). Verified on PG18 not 17 (only 18 image available). Pre-existing repo failure: ui/serve.go missing embedded build dir."
+        "Ready for review: WP01 cross-db fixtures. test/postgres.go disposable PG17 harness (unique DB/test, fail-fast, cleanup, required-mode env TRAGGO_TEST_POSTGRES_REQUIRED). test/db.go added PostgresConfig helpers. statistics/summary_test.go refactored into shared SQLite+PG suite (statsFixtures+runStatsSuite) with T003 boundary fixtures (equal range, empty keys, active span excluded, fractional rounding). Verified: SQLite suite passes (exit 0); PG18.6 local run reproduces the reported failure 'pq: syntax error at or near WHERE' (TestStats_postgres FAILs, opt-in via TRAGGO_TEST_POSTGRES_DSN); default no-DSN run skips cleanly; required-mode fails without DSN. goimports/vet clean. NOTE: lib/pq pinned v1.0.0 lacks SCRAM, so disposable PG needs md5/cleartext auth; model.All() FK ordering (TagDefinition before User) breaks AutoMigrate on PG - workaround User-first in harness (WP02/T008 relevant). Verified on PG18 not 17 (only 18 image available). Pre-existing repo failure: ui/serve.go missing embedded build dir.",
+        "Review passed: WP01 delivered FR-007 foundation. Isolated disposable-PG harness (test/postgres.go + db.go) with per-test random DB, fail-fast seeding, DROP-with-FORCE cleanup, no implicit prod DSN, InMemoryDB unchanged. Shared statsFixtures() run on SQLite (TestStats PASS) and PG (TestStats_postgres); no-DSN run skips cleanly (verified), TRAGGO_TEST_POSTGRES_REQUIRED=1 w/o DSN fails exit 1 (verified). T003 boundaries (equal range, empty keys, active span excluded, fractional rounding 0.4s->0/0.8s->1, exact boundaries) recorded on SQLite. Opt-in PG suite reproduces reported failure 'pq: syntax error at or near \"WHERE\"' (exit 1) on a real local PostgreSQL — foundation stays green. Harness self-tests (isolation/cleanup/invalid-conn) PASS on real PG. Invocation (env vars + commands) documented in comments. Checklist all PASS/N-A; only test files changed; no production SQL/GraphQL/UI contract touched. Caveats: verified on PG14 (failure version-independent; CI confirms 17 in WP05); shared summary_test.go with WP03 coordinated via sequential same-lane dependency; ui/serve.go embed failure pre-existing, not a regression."
       ],
       "provider": "__resolved_provider_absent__",
       "review_result": {
@@ -55,11 +56,19 @@
       "last_transition_at": "2026-10-22T21:45:38.007046+00:00"
     },
     "WP03": {
-      "actor": "finalize-tasks",
+      "actor": "qwen",
+      "agent": "qwen",
+      "agent_profile": "__resolved_profile_absent__",
+      "agent_profile_version": "__resolved_profile_version_absent__",
       "force_count": 0,
-      "lane": "planned",
-      "last_event_id": "01M5JS7A19P11WVS18HEP7NJ3F",
-      "last_transition_at": "2026-10-22T21:45:38.089999+00:00"
+      "lane": "in_progress",
+      "last_event_id": "01M5SK8ZFAGE7EGBDR0G3ND175",
+      "last_transition_at": "2026-10-25T13:16:22.378318+00:00",
+      "model": "__resolved_model_absent__",
+      "provider": "__resolved_provider_absent__",
+      "role": "implementer",
+      "shell_pid": 77532,
+      "shell_pid_created_at": "1792934180.113491"
     },
     "WP04": {
       "actor": "finalize-tasks",
