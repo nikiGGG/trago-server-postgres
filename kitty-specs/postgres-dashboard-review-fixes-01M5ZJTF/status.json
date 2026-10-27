@@ -1,12 +1,12 @@
 {
-  "event_count": 29,
-  "last_event_id": "01M5ZR483V59ME31DTWYYTZYGJ",
-  "materialized_at": "2026-10-27T22:36:36.860027+00:00",
+  "event_count": 30,
+  "last_event_id": "01M5ZR53RHSEV0GC42DAS892PF",
+  "materialized_at": "2026-10-27T22:37:05.169567+00:00",
   "mission_number": "",
   "mission_slug": "postgres-dashboard-review-fixes-01M5ZJTF",
   "mission_type": "software-dev",
   "summary": {
-    "approved": 4,
+    "approved": 3,
     "blocked": 0,
     "canceled": 0,
     "claimed": 0,
@@ -14,7 +14,7 @@
     "for_review": 1,
     "in_progress": 0,
     "in_review": 0,
-    "planned": 1
+    "planned": 2
   },
   "work_packages": {
     "WP01": {
@@ -22,10 +22,10 @@
       "agent": "qwen",
       "agent_profile": "__resolved_profile_absent__",
       "agent_profile_version": "__resolved_profile_version_absent__",
-      "force_count": 0,
-      "lane": "approved",
-      "last_event_id": "01M5ZQDXJNH1WH224Q36BABMA1",
-      "last_transition_at": "2026-10-27T22:24:25.173640+00:00",
+      "force_count": 1,
+      "lane": "planned",
+      "last_event_id": "01M5ZR53RHSEV0GC42DAS892PF",
+      "last_transition_at": "2026-10-27T22:37:05.169567+00:00",
       "model": "__resolved_model_absent__",
       "notes": [
         "Ready for review: loopback-only publish, credential-safe output (URL + quoted keyword redaction), actual PG17 version gate, TRAGGO_TEST_PG_PACKAGES/JSON interface; shell regressions 16/16 pass",
@@ -33,10 +33,10 @@
       ],
       "provider": "__resolved_provider_absent__",
       "review_result": {
-        "feedback_path": "/Users/n.gryaznev/Develop/OTHER/trago-server-postgres/kitty-specs/postgres-dashboard-review-fixes-01M5ZJTF/tasks/WP01-safe-postgres-launcher/review-cycle-1.md",
-        "reference": "review-cycle://postgres-dashboard-review-fixes-01M5ZJTF/WP01-safe-postgres-launcher/review-cycle-1.md",
+        "feedback_path": "/Users/n.gryaznev/Develop/OTHER/trago-server-postgres/kitty-specs/postgres-dashboard-review-fixes-01M5ZJTF/tasks/WP01-safe-postgres-launcher/review-cycle-2.md",
+        "reference": "review-cycle://postgres-dashboard-review-fixes-01M5ZJTF/WP01-safe-postgres-launcher/review-cycle-2.md",
         "reviewer": "user",
-        "verdict": "approved"
+        "verdict": "changes_requested"
       },
       "role": "reviewer",
       "shell_pid": 15426,
@@ -154,6 +154,9 @@
       "last_event_id": "01M5ZR483V59ME31DTWYYTZYGJ",
       "last_transition_at": "2026-10-27T22:36:36.860027+00:00",
       "model": "__resolved_model_absent__",
+      "notes": [
+        "Ready for review: evidence committed 8c81f4a. NOTE: real PG17 gate NOT executed - no postgres:17 image available (Docker Hub TLS-blocked, mirror auth blocked) and WP01 launcher version-probe dotfile defect (hack/test-databases.sh:191) blocks real gating. SQLite+launcher-suite+negative checks+full lint/test all pass. FR-006/NFR-002 gap open."
+      ],
       "provider": "__resolved_provider_absent__",
       "role": "implementer",
       "shell_pid": 25081,
