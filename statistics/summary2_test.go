@@ -322,6 +322,72 @@ func TestMidnightCrossing_manualHalfOpen_postgres(t *testing.T) {
 	runMidnightHalfOpenSuite(t, open, "")
 }
 
+// TestStats2_single_fractional_sqlite exercises Stats2's single-interval path
+// (which delegates straight to Stats) with a static fractional range. The
+// response must preserve the original fractional bounds and return the clipped
+// per-span rounded seconds, so Stats2 keeps the same lossless identity as Stats
+// (FR-003). IntervalSingle returns the raw from/to without the second-inclusive
+// daily builder, so fractional bounds flow straight through.
+func TestStats2_single_fractional_sqlite(t *testing.T) {
+	runStats2SingleFractional(t, func(t *testing.T) (*gorm.DB, func()) {
+		db := test.InMemoryDB(t)
+		return db.DB, func() { db.Close() }
+	}, "")
+}
+
+// TestStats2_single_fractional_postgres runs the same Stats2 fractional
+// single-interval scenario on a disposable PostgreSQL database.
+func TestStats2_single_fractional_postgres(t *testing.T) {
+	cfg := test.PostgresConfigFromEnv()
+	open := func(t *testing.T) (*gorm.DB, func()) {
+		pdb := test.NewPostgresDB(t, cfg)
+		return pdb.DB, func() { pdb.Close() }
+	}
+	runStats2SingleFractional(t, open, "")
+}
+
+// TestStats2_single_fractional_postgres_sessionTimeZone runs the same Stats2
+// fractional single-interval scenario on PostgreSQL with a non-UTC session
+// TimeZone, asserting the fractional response is independent of the session.
+func TestStats2_single_fractional_postgres_sessionTimeZone(t *testing.T) {
+	cfg := test.PostgresConfigFromEnv()
+	open := func(t *testing.T) (*gorm.DB, func()) {
+		pdb := test.NewPostgresDB(t, cfg)
+		return pdb.DB, func() { pdb.Close() }
+	}
+	runStats2SingleFractional(t, open, "Asia/Yekaterinburg")
+}
+
+// runStats2SingleFractional seeds one completed span and requests a single
+// fractional static range through Stats2, asserting the fractional response
+// bounds and the independently computed clipped seconds.
+func runStats2SingleFractional(t *testing.T, open dbFactory, sessionTZ string) {
+	db, cleanup := open(t)
+	defer cleanup()
+	if sessionTZ != "" {
+		require.NoError(t, db.Exec("SET TIME ZONE '"+sessionTZ+"'").Error)
+	}
+	require.NoError(t, db.Create(&model.User{ID: 1, Name: "u1", Pass: []byte{1}}).Error)
+	span := ts("2019-06-11T10:00:00Z", 10*time.Second, tag("type", "review"))
+	require.NoError(t, db.Create(&span).Error)
+
+	resolver := ResolverForStatistics{DB: db}
+	stats, err := resolver.Stats2(fake.User(1), test.ModelTime("2019-06-11T10:00:00Z"), gqlmodel.InputStatsSelection{
+		Interval: gqlmodel.StatsIntervalSingle,
+		Tags:     []string{"type"},
+		Range: &gqlmodel.InputRelativeOrStaticRange{
+			From: "2019-06-11T10:00:00.200Z",
+			To:   "2019-06-11T10:00:01.000Z",
+		},
+	})
+	require.NoError(t, err)
+	// Clipped span [10:00:00.200Z, 10:00:01.000Z] = 0.8s, rounded per span = 1s.
+	assertRangesEqual(t, []*gqlmodel.RangedStatisticsEntries{
+		result("2019-06-11T10:00:00.200Z", "2019-06-11T10:00:01.000Z",
+			&gqlmodel.StatisticsEntry{Key: "type", Value: "review", TimeSpendInSeconds: 1}),
+	}, stats)
+}
+
 func runMidnightHalfOpenSuite(t *testing.T, open dbFactory, sessionTZ string) {
 	db, cleanup := open(t)
 	defer cleanup()

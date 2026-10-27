@@ -282,6 +282,66 @@ func statsFixtures() []*testEntry {
 			Ranges(rangex("2019-06-11T10:00:00Z", "2019-06-11T10:00:10Z")).
 			Expected(
 				result("2019-06-11T10:00:00Z", "2019-06-11T10:00:10Z", []*gqlmodel.StatisticsEntry{}...)),
+		// ---- WP02 fractional-range identity fixtures (FR-003/C-001) ----
+		// One completed tagged span 10:00:00Z-10:00:10Z requested at fractional
+		// bounds. Every expected second is an INDEPENDENT hand calculation of
+		// the clipped, per-span rounded duration (identical on SQLite and
+		// PostgreSQL). Several requested ranges fall within the same respective
+		// whole seconds (start 10:00:00.x, end 10:00:01.x): before the range_id
+		// fix they collapsed into one identity and merged, losing the original
+		// bounds and distinct totals. The response must preserve the original
+		// fractional bounds and return each range's own total.
+		name("fractional same-second identities").
+			Load(ts("2019-06-11T10:00:00Z", 10*time.Second, tag("type", "review"))).
+			Keys("type").
+			Ranges(
+				rangex("2019-06-11T10:00:00.200Z", "2019-06-11T10:00:01.000Z"),
+				rangex("2019-06-11T10:00:00.000Z", "2019-06-11T10:00:01.800Z"),
+				rangex("2019-06-11T10:00:00.200Z", "2019-06-11T10:00:01.800Z"),
+				rangex("2019-06-11T10:00:00.800Z", "2019-06-11T10:00:01.200Z"),
+				rangex("2019-06-11T10:00:00.200000001Z", "2019-06-11T10:00:01.800000001Z")).
+			Expected(
+				result("2019-06-11T10:00:00.200Z", "2019-06-11T10:00:01.000Z",
+					entry("type", "review", 1*time.Second)),
+				result("2019-06-11T10:00:00.000Z", "2019-06-11T10:00:01.800Z",
+					entry("type", "review", 2*time.Second)),
+				result("2019-06-11T10:00:00.200Z", "2019-06-11T10:00:01.800Z",
+					entry("type", "review", 2*time.Second)),
+				result("2019-06-11T10:00:00.800Z", "2019-06-11T10:00:01.200Z",
+					entry("type", "review", 0*time.Second)),
+				result("2019-06-11T10:00:00.200000001Z", "2019-06-11T10:00:01.800000001Z",
+					entry("type", "review", 2*time.Second))),
+		// Identical duplicate ranges must each return the original total (no
+		// duplicate-join amplification), and a fractional range with no overlap
+		// retains the existing zero-fill behaviour.
+		name("fractional duplicate and empty").
+			Load(ts("2019-06-11T10:00:00Z", 10*time.Second, tag("type", "review"))).
+			Keys("type").
+			Ranges(
+				rangex("2019-06-11T10:00:00.200Z", "2019-06-11T10:00:01.000Z"),
+				rangex("2019-06-11T10:00:00.200Z", "2019-06-11T10:00:01.000Z"),
+				rangex("2019-06-11T10:00:20.200Z", "2019-06-11T10:00:21.800Z")).
+			Expected(
+				result("2019-06-11T10:00:00.200Z", "2019-06-11T10:00:01.000Z",
+					entry("type", "review", 1*time.Second)),
+				result("2019-06-11T10:00:00.200Z", "2019-06-11T10:00:01.000Z",
+					entry("type", "review", 1*time.Second)),
+				result("2019-06-11T10:00:20.200Z", "2019-06-11T10:00:21.800Z",
+					entry("type", "review", 0*time.Second))),
+		// Two 0.6s spans distinguish sum-of-rounded durations from rounding the
+		// summed duration. Each clipped span rounds to 1s (sum-of-rounded = 2);
+		// rounding the summed 1.2s would yield 1. The correct per-span rounding
+		// must report 1s for each series.
+		name("fractional sum-of-rounded vs rounded-sum").
+			Load(
+				ts("2019-06-11T10:00:00.000Z", 600*time.Millisecond, tag("type", "review")),
+				ts("2019-06-11T10:00:00.000Z", 600*time.Millisecond, tag("type", "work"))).
+			Keys("type").
+			Ranges(rangex("2019-06-11T10:00:00.000Z", "2019-06-11T10:00:01.000Z")).
+			Expected(
+				result("2019-06-11T10:00:00.000Z", "2019-06-11T10:00:01.000Z",
+					entry("type", "review", 1*time.Second),
+					entry("type", "work", 1*time.Second))),
 	}
 }
 
