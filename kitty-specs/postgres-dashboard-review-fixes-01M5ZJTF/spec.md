@@ -1,9 +1,9 @@
 # PostgreSQL dashboard review remediation
 
-**Mission**: `postgres-dashboard-review-fixes-01M5ZJTF`  
-**Created**: 2026-10-28 (Europe/Samara)  
-**Status**: Specified; implementation and verification pending  
-**Target branch**: `plan/postgres-dashboard`  
+**Mission**: `postgres-dashboard-review-fixes-01M5ZJTF`
+**Created**: 2026-10-28 (Europe/Samara)
+**Status**: Specified; implementation and verification pending
+**Target branch**: `plan/postgres-dashboard`
 **Parent mission**: `postgres-dashboard-01M5JRH2`
 
 **Input**: “Fix the postgres-dashboard mission review findings: bind the disposable PostgreSQL port to loopback, remove DSN credential logging, preserve fractional range boundaries, and propagate startup AutoMigrate errors. Add regression coverage and verify SQLite, PostgreSQL 17 with no skips, and the full lint/test pipeline. Reconcile both review reports using the resulting evidence”.
