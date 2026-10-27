@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/traggo/server/auth"
 	"github.com/traggo/server/generated/gqlmodel"
@@ -18,22 +16,23 @@ import (
 // The query is assembled from dialect-specific fragments so the same logical
 // statistics query runs on SQLite and PostgreSQL. PostgreSQL needs explicit
 // timestamp typing for the range bounds (VALUES parameters otherwise resolve
-// as text), a different duration expression (ROUND(EXTRACT(EPOCH FROM ...))
-// instead of julianday arithmetic) and a text-normalized range bound so the
-// shared result grouping can parse it. SQLite keeps its original julianday
-// behavior. Every user-supplied value stays bound as a parameter; no user input
-// is concatenated into the SQL.
+// as text) and a different duration expression (ROUND(EXTRACT(EPOCH FROM ...))
+// instead of julianday arithmetic). Every requested range carries an integer
+// range_id (its input position) that becomes the aggregate identity, so range
+// identity is decoupled from how the database stores or formats the bounds;
+// response bounds are rebuilt from the original Go input. Every user-supplied
+// value stays bound as a parameter; no user input is concatenated into the SQL.
 func (r *ResolverForStatistics) Stats(ctx context.Context, ranges []*gqlmodel.Range, tags []string, excludeTags []*gqlmodel.InputTimeSpanTag, requireTags []*gqlmodel.InputTimeSpanTag) ([]*gqlmodel.RangedStatisticsEntries, error) {
 	if len(ranges) == 0 {
 		return nil, errors.New("ranges may not be empty")
 	}
 	var variables []interface{}
 	var rangesStrs []string
-	for _, rg := range ranges {
+	for i, rg := range ranges {
 		if rg.Start.Time().After(rg.End.Time()) {
 			return nil, fmt.Errorf("range start must be before range end")
 		}
-		rangesStrs = append(rangesStrs, r.boundRow())
+		rangesStrs = append(rangesStrs, r.boundRow(i))
 		variables = append(variables, rg.Start.OmitTimeZone(), rg.End.OmitTimeZone())
 	}
 	queryRanges := strings.Join(rangesStrs, ", ")
@@ -45,11 +44,10 @@ func (r *ResolverForStatistics) Stats(ctx context.Context, ranges []*gqlmodel.Ra
 	variables = append(variables, excludeVars...)
 
 	query := fmt.Sprintf(`
-WITH dates(query_start, query_end) AS (
+WITH dates(query_start, query_end, range_id) AS (
     VALUES %s
 )
-SELECT %s                                          as query_start,
-       %s                                          as query_end,
+SELECT dates.range_id                              as range_id,
        tst.key                                     as key,
        tst.string_value                            as string_value,
        %s                                          as time_spend_in_seconds
@@ -70,11 +68,10 @@ FROM dates
 WHERE (tst.key in (?))
   AND (ts.user_id = ?)
   AND (ts.start_user_time <= dates.query_end AND ts.end_user_time >= dates.query_start)
-GROUP BY dates.query_start,
-         dates.query_end,
+GROUP BY dates.range_id,
          tst.key,
          tst.string_value;
-`, queryRanges, r.boundStartExpr(), r.boundEndExpr(), r.durationExpr(), queryRequire, queryExclude)
+`, queryRanges, r.durationExpr(), queryRequire, queryExclude)
 	variables = append(variables, tags, auth.GetUser(ctx).ID)
 
 	var entries []statReturn
@@ -83,12 +80,8 @@ GROUP BY dates.query_start,
 		return nil, err
 	}
 
-	statisticsEntries, err := group(entries)
-	if err != nil {
-		return nil, err
-	}
-
-	statisticsEntries = fillEmptyRanges(ranges, statisticsEntries)
+	statisticsEntries := buildEmptyRanges(ranges)
+	attachAggregates(statisticsEntries, entries)
 	fillEmptyTags(statisticsEntries)
 
 	return statisticsEntries, nil
@@ -100,7 +93,13 @@ func (r *ResolverForStatistics) isPostgres() bool {
 	return r.DB.Dialect().GetName() == "postgres"
 }
 
-// boundRow returns one CTE VALUES row for a single query range. PostgreSQL
+// boundRow returns one CTE VALUES row for a single query range at the given
+// input position idx. The third column is a per-input-position integer range_id
+// that becomes the aggregate identity: it is independent of the database
+// timestamp representation, so distinct requested ranges (including fractional
+// bounds finer than PostgreSQL's timestamp precision) can never merge, and
+// duplicate ranges each keep their own total. The range_id is a trusted loop
+// index, never user input, so it is emitted as an integer literal. PostgreSQL
 // explicitly types the two bound placeholders as "timestamp with time zone"
 // (timestamptz) so the values do not resolve as text, and so the comparison
 // against the local user-time timestamptz columns performs no session-TimeZone
@@ -108,34 +107,11 @@ func (r *ResolverForStatistics) isPostgres() bool {
 // absolute instant), which lib/pq encodes with its offset; casting that to
 // timestamptz preserves the absolute instant under any session TimeZone.
 // SQLite keeps the original untyped row.
-func (r *ResolverForStatistics) boundRow() string {
+func (r *ResolverForStatistics) boundRow(idx int) string {
 	if r.isPostgres() {
-		return "(?::timestamptz, ?::timestamptz)"
+		return fmt.Sprintf("(?::timestamptz, ?::timestamptz, %d)", idx)
 	}
-	return "(?, ?)"
-}
-
-// boundStartExpr returns the SQL expression producing the range start as the
-// text form the shared result grouping parses. PostgreSQL timestamps scan back
-// as RFC3339 (with a 'T' separator), which the grouping layout cannot parse, so
-// the bound is normalized to the same 'YYYY-MM-DD HH24:MI:SS+00:00' text that
-// SQLite returns for the raw bound parameter. The bound is now a timestamptz,
-// so AT TIME ZONE 'UTC' is required to render its wall-clock in UTC; the
-// user-time values carry no real timezone and are interpreted as UTC, so
-// '+00:00' is appended literally.
-func (r *ResolverForStatistics) boundStartExpr() string {
-	if r.isPostgres() {
-		return `(to_char(dates.query_start AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') || '+00:00')`
-	}
-	return "dates.query_start"
-}
-
-// boundEndExpr is the equivalent of boundStartExpr for the range end.
-func (r *ResolverForStatistics) boundEndExpr() string {
-	if r.isPostgres() {
-		return `(to_char(dates.query_end AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') || '+00:00')`
-	}
-	return "dates.query_end"
+	return fmt.Sprintf("(?, ?, %d)", idx)
 }
 
 // durationExpr returns the per-span duration expression used inside sum(). It
@@ -175,73 +151,47 @@ func fillEmptyTags(statisticsEntries []*gqlmodel.RangedStatisticsEntries) {
 	}
 }
 
-func fillEmptyRanges(ranges []*gqlmodel.Range, statisticsEntries []*gqlmodel.RangedStatisticsEntries) []*gqlmodel.RangedStatisticsEntries {
+// buildEmptyRanges builds one response range per requested range, using the
+// original Go bounds (UTC convention) and an empty entry list. Response bounds
+// therefore never depend on how the database stored or formatted the bounds;
+// accepted fractional precision is preserved even when PostgreSQL stores less
+// precision than the input.
+func buildEmptyRanges(ranges []*gqlmodel.Range) []*gqlmodel.RangedStatisticsEntries {
 	result := make([]*gqlmodel.RangedStatisticsEntries, len(ranges))
-	statsIdx := 0
-	for idx, r := range ranges {
-		if statsIdx < len(statisticsEntries) &&
-			statisticsEntries[statsIdx].Start.UTC().Equal(r.Start.UTC()) &&
-			statisticsEntries[statsIdx].End.UTC().Equal(r.End.UTC()) {
-			result[idx] = statisticsEntries[statsIdx]
-			statsIdx++
-			continue
-		}
-
-		result[idx] = &gqlmodel.RangedStatisticsEntries{
-			Start:   model.Time(r.Start.UTC()),
-			End:     model.Time(r.End.UTC()),
+	for i, rg := range ranges {
+		result[i] = &gqlmodel.RangedStatisticsEntries{
+			Start:   model.Time(rg.Start.UTC()),
+			End:     model.Time(rg.End.UTC()),
 			Entries: []*gqlmodel.StatisticsEntry{},
 		}
 	}
 	return result
 }
 
-type statReturn struct {
-	QueryStart         string
-	QueryEnd           string
-	Key                string
-	StringValue        string
-	TimeSpendInSeconds float64
-}
-
-func group(entries []statReturn) ([]*gqlmodel.RangedStatisticsEntries, error) {
-	stats := map[string]*gqlmodel.RangedStatisticsEntries{}
+// attachAggregates appends each scanned aggregate row to the response range
+// identified by its per-input-position range_id. The response ranges were built
+// from the original Go bounds, so a row is attached to exactly the requested
+// range it belongs to; distinct fractional ranges (including those finer than
+// the database timestamp precision) stay distinct, and duplicate ranges each
+// receive their own total without double-counting.
+func attachAggregates(result []*gqlmodel.RangedStatisticsEntries, entries []statReturn) {
 	for _, entry := range entries {
-		id := entry.QueryStart + "/" + entry.QueryEnd
-		if _, ok := stats[id]; !ok {
-			start, err := time.ParseInLocation("2006-01-02 15:04:05Z07:00", entry.QueryStart, time.UTC)
-			if err != nil {
-				return nil, err
-			}
-			end, err := time.ParseInLocation("2006-01-02 15:04:05Z07:00", entry.QueryEnd, time.UTC)
-			if err != nil {
-				return nil, err
-			}
-			stats[id] = &gqlmodel.RangedStatisticsEntries{Start: model.Time(start), End: model.Time(end)}
+		if entry.RangeID < 0 || entry.RangeID >= len(result) {
+			continue
 		}
-		stats[id].Entries = append(stats[id].Entries, &gqlmodel.StatisticsEntry{
+		result[entry.RangeID].Entries = append(result[entry.RangeID].Entries, &gqlmodel.StatisticsEntry{
 			Key:                entry.Key,
 			Value:              entry.StringValue,
 			TimeSpendInSeconds: entry.TimeSpendInSeconds,
 		})
 	}
+}
 
-	var result []*gqlmodel.RangedStatisticsEntries
-	for _, value := range stats {
-		result = append(result, value)
-	}
-
-	// Order by range start, then range end. A plain "Start before End"
-	// comparison is not a strict ordering and misbehaves when two requested
-	// ranges share the same start (different ends), which the shared grouping
-	// and zero-fill rely on.
-	sort.SliceStable(result, func(i, j int) bool {
-		if !result[i].Start.Time().Equal(result[j].Start.Time()) {
-			return result[i].Start.Time().Before(result[j].Start.Time())
-		}
-		return result[i].End.Time().Before(result[j].End.Time())
-	})
-	return result, nil
+type statReturn struct {
+	RangeID            int
+	Key                string
+	StringValue        string
+	TimeSpendInSeconds float64
 }
 
 func build(tags []*gqlmodel.InputTimeSpanTag, noop string) (string, []interface{}) {

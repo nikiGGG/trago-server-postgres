@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -14,6 +15,22 @@ import (
 )
 
 var mkdirAll = os.MkdirAll
+
+// migrateSchema runs the production schema migration on the freshly opened
+// pool. It is a package variable so the internal database tests can observe the
+// exact owned pool used during a failed initialization and inject controlled
+// failures without substituting an unrelated connection. Overriding tests must
+// restore it (see restoreMigrationHooks in migration_test.go).
+var migrateSchema = func(db *gorm.DB) error {
+	return db.AutoMigrate(model.All()...).Error
+}
+
+// closePool closes the database pool opened during initialization. Like
+// migrateSchema it is a package variable so tests can count cleanup runs and
+// inject a controlled close failure without replacing an unrelated connection.
+var closePool = func(db *gorm.DB) error {
+	return db.Close()
+}
 
 // New creates a gorm instance.
 func New(dialect, connection string) (*gorm.DB, error) {
@@ -40,7 +57,17 @@ func New(dialect, connection string) (*gorm.DB, error) {
 	}
 
 	log.Debug().Msg("Auto migrating schema's")
-	db.AutoMigrate(model.All()...)
+	if err := migrateSchema(db); err != nil {
+		// The connection succeeded but the schema migration failed. A failed
+		// initialization must never return a usable handle, so close the pool
+		// opened by it and report the migration cause. If closing also fails,
+		// the migration defect is still the real problem and must remain the
+		// reported error; a cleanup failure must not hide it.
+		if cerr := closePool(db); cerr != nil {
+			log.Debug().Err(cerr).Msg("Failed to close database pool after migration error")
+		}
+		return nil, fmt.Errorf("migrate database schema: %w", err)
+	}
 
 	log.Debug().Msg("Database initialized")
 	return db, nil

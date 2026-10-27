@@ -25,9 +25,12 @@ func (t Time) UTC() time.Time {
 	return t.Time().UTC()
 }
 
-// MarshalGQL implements the graphql.Marshaler interface
+// MarshalGQL implements the graphql.Marshaler interface. RFC3339Nano preserves
+// accepted fractional precision on the wire while whole-second values format
+// identically to RFC3339 (Go omits trailing fractional zeros), so existing
+// integer-bound responses and snapshots are unchanged.
 func (t Time) MarshalGQL(w io.Writer) {
-	if _, err := w.Write([]byte(fmt.Sprintf(`"%s"`, t.Time().Format(time.RFC3339)))); err != nil {
+	if _, err := w.Write([]byte(fmt.Sprintf(`"%s"`, t.Time().Format(time.RFC3339Nano)))); err != nil {
 		panic(err)
 	}
 }
