@@ -28,7 +28,8 @@
       "last_transition_at": "2026-10-27T22:24:25.173640+00:00",
       "model": "__resolved_model_absent__",
       "notes": [
-        "Ready for review: loopback-only publish, credential-safe output (URL + quoted keyword redaction), actual PG17 version gate, TRAGGO_TEST_PG_PACKAGES/JSON interface; shell regressions 16/16 pass"
+        "Ready for review: loopback-only publish, credential-safe output (URL + quoted keyword redaction), actual PG17 version gate, TRAGGO_TEST_PG_PACKAGES/JSON interface; shell regressions 16/16 pass",
+        "Review passed: loopback-only publish (127.0.0.1:PORT:5432), credential-safe output (DSN echo removed, robust perl password redaction, captured child output redacted+removed), actual server_version_num PG17 check on both paths, TRAGGO_TEST_PG_PACKAGES + TRAGGO_TEST_GO_JSON interface, cleanup on all failure paths preserving exit status, and shell regression suite fails base launcher and passes fixed launcher (16 cases, 0 failed); only owned hack files changed"
       ],
       "provider": "__resolved_provider_absent__",
       "review_result": {
