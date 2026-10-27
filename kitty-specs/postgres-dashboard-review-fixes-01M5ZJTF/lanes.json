@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "mission_slug": "postgres-dashboard-review-fixes-01M5ZJTF",
+  "mission_id": "01M5ZJTFJ5X3KPG3EGJ62NHA7Y",
+  "mission_branch": "kitty/mission-postgres-dashboard-review-fixes-01M5ZJTF",
+  "target_branch": "plan/postgres-dashboard",
+  "lanes": [
+    {
+      "lane_id": "lane-a",
+      "wp_ids": [
+        "WP01"
+      ],
+      "write_scope": [
+        "hack/test-databases.sh",
+        "hack/test-databases_test.sh"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "dashboard",
+        "legacy-cleanup"
+      ],
+      "depends_on_lanes": [],
+      "parallel_group": 0
+    },
+    {
+      "lane_id": "lane-b",
+      "wp_ids": [
+        "WP02"
+      ],
+      "write_scope": [
+        "graphql/handler_test.go",
+        "model/time.go",
+        "model/time_test.go",
+        "statistics/summary.go",
+        "statistics/summary2_test.go",
+        "statistics/summary_test.go"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "dashboard",
+        "legacy-cleanup"
+      ],
+      "depends_on_lanes": [],
+      "parallel_group": 0
+    },
+    {
+      "lane_id": "lane-c",
+      "wp_ids": [
+        "WP03"
+      ],
+      "write_scope": [
+        "database/database.go",
+        "database/database_test.go",
+        "database/migration_external_test.go",
+        "database/migration_test.go",
+        "main_test.go",
+        "test/postgres.go",
+        "test/postgres_test.go"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "dashboard",
+        "legacy-cleanup"
+      ],
+      "depends_on_lanes": [],
+      "parallel_group": 0
+    },
+    {
+      "lane_id": "lane-d",
+      "wp_ids": [
+        "WP04"
+      ],
+      "write_scope": [
+        ".github/workflows/build.yml",
+        "Makefile",
+        "hack/check-postgres-results.go",
+        "hack/check-postgres-results_test.go"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "dashboard",
+        "legacy-cleanup"
+      ],
+      "depends_on_lanes": [
+        "lane-a",
+        "lane-b",
+        "lane-c"
+      ],
+      "parallel_group": 1
+    },
+    {
+      "lane_id": "lane-e",
+      "wp_ids": [
+        "WP05"
+      ],
+      "write_scope": [
+        "docs/reviews/postgres-dashboard-remediation-evidence-2026-10-28.md"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "dashboard",
+        "legacy-cleanup"
+      ],
+      "depends_on_lanes": [
+        "lane-d"
+      ],
+      "parallel_group": 2
+    },
+    {
+      "lane_id": "lane-planning",
+      "wp_ids": [
+        "WP06"
+      ],
+      "write_scope": [
+        "docs/reviews/postgres-dashboard-mission-review-2026-10-27.md",
+        "kitty-specs/postgres-dashboard-01M5JRH2/acceptance-matrix.json",
+        "kitty-specs/postgres-dashboard-01M5JRH2/acceptance.md",
+        "kitty-specs/postgres-dashboard-01M5JRH2/mission-review.md"
+      ],
+      "predicted_surfaces": [
+        "planning"
+      ],
+      "depends_on_lanes": [
+        "lane-e"
+      ],
+      "parallel_group": 3
+    }
+  ],
+  "computed_at": "2026-10-27T21:39:44.365252+00:00",
+  "computed_from": "dependency_graph+ownership",
+  "planning_artifact_wps": [
+    "WP06"
+  ],
+  "planning_commit_sha": "85dbdc07228d69ac2f307b1371c77b687d416662"
+}
