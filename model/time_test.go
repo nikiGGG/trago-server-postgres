@@ -20,6 +20,46 @@ func TestTime_MarshalGQL(t *testing.T) {
 	assert.Equal(t, `"`+expected+`"`, actual)
 }
 
+// TestTime_MarshalGQL_preservesFractionalPrecision verifies the wire scalar
+// retains accepted fractional seconds (RFC3339Nano), which the previous
+// RFC3339 serialization truncated.
+func TestTime_MarshalGQL_preservesFractionalPrecision(t *testing.T) {
+	var buffer bytes.Buffer
+	parse, err := time.Parse(time.RFC3339Nano, "2009-06-30T18:30:00.123456789+02:00")
+	assert.Nil(t, err)
+	toTest := Time(parse)
+	toTest.MarshalGQL(&buffer)
+	assert.Equal(t, `"2009-06-30T18:30:00.123456789+02:00"`, buffer.String())
+}
+
+// TestTime_MarshalGQL_wholeSecondSnapshotCompatibility verifies a whole-second
+// timestamp still serializes exactly as before (RFC3339Nano omits trailing
+// fractional zeros), so integer-bound responses and snapshots are unchanged.
+func TestTime_MarshalGQL_wholeSecondSnapshotCompatibility(t *testing.T) {
+	var buffer bytes.Buffer
+	parse, err := time.Parse(time.RFC3339Nano, "2009-06-30T18:30:00+02:00")
+	assert.Nil(t, err)
+	toTest := Time(parse)
+	toTest.MarshalGQL(&buffer)
+	assert.Equal(t, `"2009-06-30T18:30:00+02:00"`, buffer.String())
+}
+
+// TestTime_roundTrip_fractional marshals then unmarshals a fractional time and
+// verifies the accepted precision survives the full scalar round trip.
+func TestTime_roundTrip_fractional(t *testing.T) {
+	source := "2009-06-30T18:30:00.123456789+02:00"
+
+	var buffer bytes.Buffer
+	parsed, err := time.Parse(time.RFC3339Nano, source)
+	assert.Nil(t, err)
+	Time(parsed).MarshalGQL(&buffer)
+
+	var roundTripped Time
+	err = roundTripped.UnmarshalGQL(buffer.String()[1 : len(buffer.String())-1])
+	assert.Nil(t, err)
+	assert.Equal(t, Time(parsed).Time().UTC(), roundTripped.Time().UTC())
+}
+
 func TestTime_MarshalGQL_fails(t *testing.T) {
 	toTest := &Time{}
 	assert.Panics(t, func() {
