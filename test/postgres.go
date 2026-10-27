@@ -11,7 +11,6 @@ import (
 
 	_ "github.com/lib/pq" // register the "postgres" driver for the maintenance connection
 	"github.com/traggo/server/database"
-	"github.com/traggo/server/model"
 )
 
 // PostgresDB is a disposable PostgreSQL database used by exactly one test.
@@ -84,29 +83,17 @@ func newPostgresDB(cfg PostgresConfig, t *testing.T) (*PostgresDB, error) {
 		dropPostgresDatabase(cfg.BaseDSN, dbName)
 		return nil, err
 	}
+	// database.New runs AutoMigrate(model.All()...) itself and propagates any
+	// migration error, so the harness owns no separate migration step. The
+	// model.All() order is already topologically sorted (users before
+	// tag_definitions etc.), so production startup migration works on a fresh
+	// PostgreSQL database without a manual table-first workaround. A failed
+	// connect or migration must fail the harness (fail-fast), never silently
+	// proceed.
 	gdb, err := database.New("postgres", targetDSN)
 	if err != nil {
 		dropPostgresDatabase(cfg.BaseDSN, dbName)
 		return nil, fmt.Errorf("connect/AutoMigrate disposable database %q: %w", dbName, err)
-	}
-	// database.New ignores the AutoMigrate error, so surface it here: a failed
-	// migration must fail the harness (fail-fast), never silently proceed.
-	//
-	// Note: model.All() declares TagDefinition before User, and TagDefinition
-	// carries `REFERENCES users(id)`. SQLite tolerates that at CREATE TABLE, but
-	// PostgreSQL rejects the forward reference ("relation \"users\" does not
-	// exist"). Create User first so the disposable schema migrates cleanly. This
-	// workaround lives only in the test harness; production startup migration
-	// ordering is handled separately (see WP02/T008).
-	if err := gdb.AutoMigrate(&model.User{}).Error; err != nil {
-		gdb.Close()
-		dropPostgresDatabase(cfg.BaseDSN, dbName)
-		return nil, fmt.Errorf("AutoMigrate users on disposable database %q: %w", dbName, err)
-	}
-	if err := gdb.AutoMigrate(model.All()...).Error; err != nil {
-		gdb.Close()
-		dropPostgresDatabase(cfg.BaseDSN, dbName)
-		return nil, fmt.Errorf("AutoMigrate disposable database %q: %w", dbName, err)
 	}
 
 	return &PostgresDB{
