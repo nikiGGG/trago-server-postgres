@@ -10,5 +10,7 @@
   "purpose_tldr": "postgres dashboard review fixes",
   "slug": "postgres-dashboard-review-fixes-01M5ZJTF",
   "target_branch": "plan/postgres-dashboard",
-  "topology": "single_branch"
+  "topology": "single_branch",
+  "vcs": "git",
+  "vcs_locked_at": "2026-10-27T22:15:15.144124+00:00"
 }
