@@ -47,20 +47,33 @@ test-js:
 
 test: test-go test-js
 
+# test-database-launcher runs the launcher's own shell regression suite. It
+# exercises loopback publishing, credential-safe output, required-mode failure
+# (DSN absent / unusable loopback DSN) and cleanup using command doubles, so it
+# needs no server. Mirrors the `postgres-launcher-test` step in build.yml.
+.PHONY: test-database-launcher
+test-database-launcher:
+	./hack/test-databases_test.sh
+
 # test-postgres runs the shared cross-database regression/acceptance fixtures
 # against BOTH SQLite (always executed) and a disposable PostgreSQL server
-# (mandatory, FR-007 / WP05). It mirrors the `postgres-test` job in
+# (mandatory, FR-006 / WP04). It mirrors the `postgres-test` job in
 # .github/workflows/build.yml. See hack/test-databases.sh for the environment
-# variables it reads (TRAGGO_TEST_POSTGRES_DSN / TRAGGO_TEST_POSTGRES_REQUIRED /
-# TRAGGO_TEST_PG_IMAGE / TRAGGO_TEST_PG_PORT).
+# variables it reads (TRAGGO_TEST_POSTGRES_DSN / TRAGGO_TEST_PG_IMAGE /
+# TRAGGO_TEST_PG_PORT / TRAGGO_TEST_PG_PACKAGES / TRAGGO_TEST_GO_JSON).
 #
 # Without TRAGGO_TEST_POSTGRES_DSN the script starts a disposable postgres:17
-# container itself; with a DSN it reuses the running server (the CI path).
-# TRAGGO_TEST_POSTGRES_REQUIRED is always forced to 1 so a green run provably
-# executed real PostgreSQL fixtures.
+# container itself; with a DSN it reuses the running server. All six mandatory
+# packages are exercised (statistics, device, dashboard, test, database,
+# model), the child go test runs with -json (TRAGGO_TEST_GO_JSON=1), and the
+# JSON stream is validated by hack/check-postgres-results.go against the
+# reviewed live-suite manifest. pipefail preserves the launcher's own nonzero
+# exit so a failed harness never reports green. TRAGGO_TEST_POSTGRES_REQUIRED is
+# always forced to 1 inside the launcher so a green run provably executed real
+# PostgreSQL fixtures.
 .PHONY: test-postgres
 test-postgres:
-	./hack/test-databases.sh
+	set -o pipefail; TRAGGO_TEST_GO_JSON=1 TRAGGO_TEST_PG_PACKAGES="./statistics/... ./device/... ./dashboard/... ./test/... ./database/... ./model/..." ./hack/test-databases.sh | go run ./hack/check-postgres-results.go
 
 install-go:
 	go mod download

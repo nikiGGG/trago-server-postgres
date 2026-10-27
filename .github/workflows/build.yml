@@ -29,35 +29,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Dedicated, REQUIRED PostgreSQL 17 job (FR-007 / WP05).
+  # Dedicated, REQUIRED PostgreSQL 17 job (FR-006 / WP04).
   #
   # The `build` job above still covers SQLite (and the full pipeline). This job
   # is the mandatory PostgreSQL gate: it runs the exact same cross-database
-  # regression/acceptance fixtures (statistics incl. session-TZ, model,
-  # dashboard incl. text/bytea, device, acceptance) against a disposable
-  # PostgreSQL 17 service AND SQLite in a single invocation, with WP01's
-  # required-mode enabled. A missing/unusable connection, a failed harness
-  # setup, or any skipped PostgreSQL suite makes the job FAIL - a green job can
-  # never be SQLite-only.
+  # regression/acceptance fixtures (statistics incl. session-TZ and fractional
+  # children, model, dashboard incl. text/bytea and reopen, device, test,
+  # database migration/initialization) against a disposable PostgreSQL 17 server
+  # AND SQLite in a single invocation, through the same safe launcher used
+  # locally.
+  #
+  # The launcher (hack/test-databases.sh) starts its own postgres:17 container
+  # on the Ubuntu host Docker runtime, published on IPv4 loopback only,
+  # health-checks it, verifies the connected server is actually major 17,
+  # cleans up on every exit, and forces required-mode. A missing/unusable
+  # connection, a failed harness setup, or any skipped PostgreSQL suite makes
+  # the job FAIL - a green job can never be SQLite-only. The `go test -json`
+  # stream is then validated by hack/check-postgres-results.go against the
+  # expected live-suite manifest (zero skipped PostgreSQL cases, all six
+  # packages complete). No service container and no hardcoded DSN are supplied;
+  # the launcher owns publishing, readiness/version checks and cleanup.
   postgres-test:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        # PostgreSQL 17 with a lib/pq-compatible host authentication method.
-        # lib/pq v1.0.0 (pinned in go.mod) does not implement PostgreSQL's
-        # default SCRAM-SHA-256 authentication (the default since PG15), so the
-        # service uses `trust` auth. Never use trust authentication on a real
-        # database.
-        image: postgres:17
-        env:
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/setup-go@v6
         with:
@@ -69,13 +62,12 @@ jobs:
       - run: make install-go
       # Generate GraphQL sources before running the backend tests.
       - run: make generate-go
-      - name: Run SQLite + PostgreSQL regression/acceptance suites (required)
+      # Launcher shell regression suite (no server required): loopback
+      # publishing, credential-safe output, required-mode failure and cleanup.
+      - name: Launcher shell regression suite
+        run: make test-database-launcher
+      # SQLite + PostgreSQL 17 regression/acceptance suites (required). The
+      # launcher self-starts the disposable server on the Ubuntu host Docker
+      # runtime and the JSON result stream is validated by the result checker.
+      - name: SQLite + PostgreSQL 17 regression/acceptance suites (required)
         run: make test-postgres
-        env:
-          # Points at the disposable service container; the named database is
-          # used only as a maintenance target to CREATE/DROP an isolated
-          # database per test. Never point this at a production database.
-          TRAGGO_TEST_POSTGRES_DSN: postgres://postgres@localhost:5432/postgres?sslmode=disable
-          # Required-mode (WP01/T018): absence of a usable DSN or any skipped
-          # PostgreSQL suite becomes a hard failure, never a skip.
-          TRAGGO_TEST_POSTGRES_REQUIRED: "1"
