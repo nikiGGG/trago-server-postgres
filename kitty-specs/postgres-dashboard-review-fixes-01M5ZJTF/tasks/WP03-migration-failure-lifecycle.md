@@ -90,6 +90,8 @@ Sibling owned files are read-only here. A discovered sibling defect returns to i
 
 Add database/migration_external_test.go in package database_test. Use synthetic isolated SQLite and PG databases, connect successfully, then introduce a view named users or equivalent deterministic schema conflict.
 
+Name the PostgreSQL public-New migration-error regression TestMigrationFailure_postgres. It must connect to the configured disposable server and execute the real migration failure, not merely test a malformed/unusable DSN. WP04 registers this exact root in its expected live-suite manifest.
+
 **Boundaries and edge cases**
 
 Assert the intended migration statement fails rather than connection opening. Use existing PostgreSQL isolation/required-mode harness without importing test from internal package database.
@@ -165,6 +167,8 @@ Remove redundant migrations from test/postgres.go once production New handles er
 **Boundaries and edge cases**
 
 Exercise healthy fresh/reopen on both engines, including text and legacy bytea enum read/write and physical-column assertions from existing suites. Do not convert columns or upgrade GORM.
+
+Name the database package's healthy PostgreSQL fresh/reopen regression TestInitializationReopen_postgres, also in database/migration_external_test.go. WP04 requires its live-server execution separately from the expected migration-error case; existing dashboard/device persistence suites retain their own coverage.
 
 **Verification and done evidence**
 

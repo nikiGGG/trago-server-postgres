@@ -16,6 +16,8 @@ Completion is event-sourced. Txxx rows below are references, not checkboxes. Use
 
 Launcher/CI interface: WP01 owns complete default PG packages, TRAGGO_TEST_PG_PACKAGES override and TRAGGO_TEST_GO_JSON=1; JSON test events stay parseable, stage messages use stderr. WP04 owns Makefile/workflow and the skip/count result checker. No file is owned by both packages.
 
+Post-analysis clarification U1: WP04/T018 uses an explicit manifest of exact package/suite/required-child identities, requires all six packages to complete, and rejects omitted suites/children, nested skips and incomplete results. Server-free configuration/DSN/invalid-connection tests cannot count as live PostgreSQL execution. WP03 supplies TestMigrationFailure_postgres and TestInitializationReopen_postgres; WP04 registers the final WP02 fractional child identities. The manifest lives in the already-owned Go checker, so file ownership and dependencies are unchanged.
+
 ## Work Package WP01: Safe disposable PostgreSQL launcher (Priority: P1)
 
 **Goal**: Make the local disposable launcher enforce loopback publishing, credential-safe output and actual PostgreSQL 17 execution.
@@ -137,13 +139,13 @@ Disjoint root package; logically independent of the other roots, but use sequent
 
 A view named users may be skipped by GORM introspection; prove that the failure happens during AutoMigrate. Internal database tests importing test would form a cycle.
 
-**Prompt size**: 199 lines; 5 subtasks.
+**Prompt size**: 203 lines; 5 subtasks.
 
 ## Work Package WP04: Mandatory PostgreSQL and launcher CI gates (Priority: P1)
 
 **Goal**: Run the same safe launcher in CI, include model/database regressions and reject skipped PostgreSQL tests in the dedicated gate.
 
-**Independent Test**: CI invokes explicit shell-regression and test-postgres targets, covers all six packages, and a gate result checker rejects injected PG skips or zero PG execution.
+**Independent Test**: CI invokes explicit shell-regression and test-postgres targets, covers all six packages, and the result checker requires every expected live PostgreSQL suite/child. Server-free-only results, omitted suites/children/packages, nested skips and incomplete streams fail the gate.
 
 **Prompt**: [tasks/WP04-mandatory-database-gates.md](tasks/WP04-mandatory-database-gates.md).
 
@@ -155,7 +157,7 @@ T016 Wire explicit regression and complete database targets (WP04)
 
 T017 Replace CI service-container setup with the safe launcher (WP04)
 
-T018 Reject skipped PostgreSQL execution from JSON results (WP04)
+T018 Enforce the expected live PostgreSQL suite manifest from JSON results (WP04)
 
 T019 Verify gate failure semantics and focused integration (WP04)
 
@@ -176,7 +178,7 @@ Wait for dependency evidence; do not run concurrent writers on this single-branc
 
 go test success alone does not prove PostgreSQL cases executed. Skip detection must use test-result events and recognize nested PostgreSQL subtests without treating unrelated SQLite runs as PG evidence.
 
-**Prompt size**: 177 lines; 4 subtasks.
+**Prompt size**: 195 lines; 4 subtasks.
 
 ## Work Package WP05: Fresh integrated verification and common evidence (Priority: P1)
 
@@ -296,7 +298,7 @@ Finding IDs collide across reports. Recorded tool/user names are not proof of in
 | T015 | Make the harness defer migration ownership to production New | WP03 |
 | T016 | Wire explicit regression and complete database targets | WP04 |
 | T017 | Replace CI service-container setup with the safe launcher | WP04 |
-| T018 | Reject skipped PostgreSQL execution from JSON results | WP04 |
+| T018 | Enforce the expected live PostgreSQL suite manifest from JSON results | WP04 |
 | T019 | Verify gate failure semantics and focused integration | WP04 |
 | T020 | Prepare the actual verification environment and identify source | WP05 |
 | T021 | Run fresh SQLite and regression discrimination checks | WP05 |

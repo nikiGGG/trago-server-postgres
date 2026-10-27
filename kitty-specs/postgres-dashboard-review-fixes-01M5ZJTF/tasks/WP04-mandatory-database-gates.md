@@ -47,7 +47,7 @@ Use the `spk-doctrine-profile-load` skill (legacy `/ad-hoc-profile-load`) to loa
 
 Run the same safe launcher in CI, include model/database regressions and reject skipped PostgreSQL tests in the dedicated gate.
 
-**Independent acceptance**: CI invokes explicit shell-regression and test-postgres targets, covers all six packages, and a gate result checker rejects injected PG skips or zero PG execution.
+**Independent acceptance**: CI invokes explicit shell-regression and test-postgres targets, covers all six packages, and the result checker requires every expected live PostgreSQL suite to pass. Server-free helpers cannot satisfy execution counts; missing suites, PostgreSQL skips and incomplete result streams fail the gate.
 
 **Requirement refs**: FR-001, FR-005, FR-006, NFR-002, C-004.
 
@@ -114,9 +114,9 @@ No independent broad port mapping remains in the workflow. There is no supplied 
 
 Record the changed files, exact sanitized command, exit and applicable test/skip counts for T017. Completion is recorded through the Spec Kitty event log, not markdown checkboxes.
 
-### T018 — Reject skipped PostgreSQL execution from JSON results
+### T018 — Enforce the expected live PostgreSQL suite manifest from JSON results
 
-**Deliverable**: Reject skipped PostgreSQL execution from JSON results.
+**Deliverable**: Enforce the expected live PostgreSQL suite manifest from JSON results.
 
 **Implementation**
 
@@ -124,11 +124,27 @@ Add a standard-library Go result checker in hack/check-postgres-results.go, invo
 
 **Boundaries and edge cases**
 
-Recognize package/test/subtest PG identities based on actual suite naming. Fail on PG skip, no executed PG cases, malformed/truncated event stream or failed command; preserve nonzero test status and readable counts.
+Embed a reviewed, nonempty expected-suite manifest in hack/check-postgres-results.go, keyed by the exact Go JSON `Package` and `Test` fields. Do not classify live execution by a case-insensitive Postgres/PG substring. WP04 runs after WP02/WP03, so reconcile the manifest with their final test names before approval. Intentional suite renames require a matching manifest amendment; test selection flags and package overrides cannot lower the manifest requirements.
+
+The manifest must include these existing real-engine roots (package names are relative to module github.com/traggo/server):
+
+| Package | Required suite roots |
+| --- | --- |
+| statistics | TestStats_postgres; TestStats_postgres_sessionTimeZone; TestStats2_daily_postgres; TestStats2_daily_postgres_sessionTimeZone; TestMidnightCrossing_manualHalfOpen_postgres |
+| dashboard | TestDashboardEntryPersistence_text; TestDashboardEntryPersistence_bytea; TestDashboardLifecycle_pgReconnect; TestStartupMigration_reopen_textAndBytea; TestDashboardAPI_postgres; TestStatsGraphQLShapes_postgres |
+| device | TestDevicePersistence_text; TestDevicePersistence_bytea; TestDeviceLifecycle_pgReconnect |
+| test | TestPostgresDB_isolation; TestPostgresDB_cleanup |
+| database | TestMigrationFailure_postgres; TestInitializationReopen_postgres (new WP03 real-engine regressions) |
+
+Include expected child identities for the fractional fixtures introduced by WP02 and the text_schema/bytea_schema reopen cases. Enumerate them from the reviewed fixtures when implementing WP04 rather than accepting whichever children happen to appear in a result stream. Check every observed descendant of a manifest root for skip/fail, including deeper nested subtests. Require each manifest root and expected child to have a run event followed by a terminal pass; parent pass alone cannot substitute for a missing child.
+
+Exclude TestPostgresDSNForDatabase, TestPostgresConfigFromEnv and TestPostgresDB_invalidConnection from live-execution counts: they do not establish a successful connection to the configured server. Likewise, model enum Scan/Value tests mentioning PostgreSQL are unit tests. Model remains a mandatory package, but has no live-engine suite requirement unless one is actually added and registered.
+
+Require successful package completion for statistics, dashboard, device, test, database and model using exact fully qualified package identities; an omitted package is a failure even if other suites pass. Fail on an absent manifest root/child, live-engine skip/fail, zero completed live suites, missing terminal events, malformed/truncated JSON or a failed launcher/test command. Count completed live suite roots once, report child counts separately and preserve the original nonzero command status. Actual connected server-version verification remains WP01's independent requirement; a JSON test name does not prove major 17.
 
 **Verification and done evidence**
 
-Synthetic streams demonstrate pass, PG skip, zero PG, failed test and malformed results. Dedicated output reports PG execution/skip counts without exposing connection secrets.
+Synthetic streams must demonstrate: the complete manifest passing; only server-free Postgres-named tests passing (reject); one required suite absent while others pass (reject); a required fractional/reopen child absent despite parent pass (reject); a nested live child skipped (reject); a mandatory package omitted (reject); zero live execution; failed test/launcher; and malformed or truncated results. A package/test identity from the wrong package must not satisfy a manifest entry. Dedicated output reports live root/child execution and skip counts without exposing connection secrets.
 
 Record the changed files, exact sanitized command, exit and applicable test/skip counts for T018. Completion is recorded through the Spec Kitty event log, not markdown checkboxes.
 
@@ -166,7 +182,7 @@ Missing tools/services and failed required checks remain unresolved verification
 
 ## Definition of done and review guidance
 
-CI invokes explicit shell-regression and test-postgres targets, covers all six packages, and a gate result checker rejects injected PG skips or zero PG execution.
+CI invokes explicit shell-regression and test-postgres targets, covers all six packages, and the result checker enforces the reviewed live-suite manifest independently of server-free tests, package overrides and test filters. All required roots/children pass with zero live-engine skips.
 
 Reviewer checks the complete requirement mapping, declared file ownership and every subtask oracle. Require evidence that exposes the defect, preserves compatibility and distinguishes intended negative checks from failed acceptance.
 
@@ -175,3 +191,5 @@ Do not mark the WP ready solely because a command exited zero if it skipped requ
 ## Activity log
 
 2026-10-28 (Europe/Samara): Codex authored this planning prompt. Implementation and executable acceptance have not started; task states belong to the canonical event log.
+
+2026-10-28 (Europe/Samara): Clarified analysis finding U1 with exact live-suite identities, required child/package completion, server-free exclusions and negative result-stream cases.
