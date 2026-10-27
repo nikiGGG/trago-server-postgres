@@ -124,7 +124,8 @@
       "last_transition_at": "2026-10-27T22:29:47.810469+00:00",
       "model": "__resolved_model_absent__",
       "notes": [
-        "Ready for review: launcher CI gates + result checker enforcing live-PG manifest"
+        "Ready for review: launcher CI gates + result checker enforcing live-PG manifest",
+        "Review passed: CI uses the safe launcher (no service container/DSN) covering all six packages; checker enforces the reviewed live-suite manifest (roots+children, rejects server-free-only, omitted suites/packages, nested skips, truncated/malformed streams); 15 checker tests pass, go vet clean; only the 4 owned files changed; no WP01/WP03 ownership overlap. Minor non-blocking nit: unused unexported shortPackageName helper."
       ],
       "provider": "__resolved_provider_absent__",
       "review_result": {
