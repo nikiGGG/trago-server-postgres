@@ -47,9 +47,13 @@ func TestWithAlreadyExistingSqliteFolder(t *testing.T) {
 
 func TestPanicsOnMkdirError(t *testing.T) {
 	os.RemoveAll("somepath")
+	origMkdirAll := mkdirAll
 	mkdirAll = func(path string, perm os.FileMode) error {
 		return errors.New("ERROR")
 	}
+	// Restore the mutable hook so this override cannot leak into other tests,
+	// keeping test order independent.
+	t.Cleanup(func() { mkdirAll = origMkdirAll })
 	assert.Panics(t, func() {
 		New("sqlite3", "somepath/test.db")
 	})
