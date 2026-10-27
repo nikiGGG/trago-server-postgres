@@ -30,7 +30,8 @@
       "notes": [
         "Ready for review: loopback-only publish, credential-safe output (URL + quoted keyword redaction), actual PG17 version gate, TRAGGO_TEST_PG_PACKAGES/JSON interface; shell regressions 16/16 pass",
         "Review passed: loopback-only publish (127.0.0.1:PORT:5432), credential-safe output (DSN echo removed, robust perl password redaction, captured child output redacted+removed), actual server_version_num PG17 check on both paths, TRAGGO_TEST_PG_PACKAGES + TRAGGO_TEST_GO_JSON interface, cleanup on all failure paths preserving exit status, and shell regression suite fails base launcher and passes fixed launcher (16 cases, 0 failed); only owned hack files changed",
-        "Cycle 2 fix: dotfile version probe renamed; PG17 gate now real"
+        "Cycle 2 fix: dotfile version probe renamed; PG17 gate now real",
+        "Review passed: cycle-2 fix confirmed. Version-probe helper renamed to non-dotfile pgversion_$$.go (was .pgversion-$$.go); real Go toolchain compiles it (verified via go build); regression guard added to hack/test-databases_test.sh correctly rejects dotfile/underscore names (verified against .pgversion-*.go). Shell suite passes 16/0/0; bash -n clean on both owned scripts; only hack/test-databases.sh and hack/test-databases_test.sh changed; loopback publishing, credential redaction, cleanup, custom port and DSN reuse all intact."
       ],
       "provider": "__resolved_provider_absent__",
       "review": null,
