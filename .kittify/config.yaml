@@ -11,3 +11,5 @@ agents:
   - qwen
   auto_commit: true
   lint_on_edit: false
+mission_type_activations:
+- software-dev
