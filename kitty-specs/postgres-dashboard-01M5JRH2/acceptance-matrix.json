@@ -10,9 +10,9 @@
       "proof_type": "automated_test",
       "evidence": "statistics/summary_test.go shared suite (WP03) passes on SQLite + PostgreSQL; dashboard/postgres_acceptance_test.go TestStatsGraphQLShapes_* asserts both stats/stats2 RangedStatisticsEntries shape on both engines (WP04).",
       "pass_fail": "pass",
-      "verified_by": "qwen-review",
+      "verified_by": "user",
       "verified_at": "2026-10-25T00:00:00Z",
-      "notes": "Verified by WP03 and WP04 review: identical fixtures pass on SQLite and disposable PostgreSQL (incl. session-TZ)."
+      "notes": "Verified by WP03 and WP04 review: identical fixtures pass on SQLite and disposable PostgreSQL (incl. session-TZ). Attribution correction 2026-10-28: verified_by set from the recorded human reviewer 'user' (per status.events.jsonl 2026-10-25, tool 'Nikita Gryaznev'); the prior 'qwen-review' label is not an event-recorded identity and 'qwen' is an automated reviewer, not independent human review (see acceptance.md)."
     },
     {
       "criterion_id": "FR-002",
@@ -20,7 +20,7 @@
       "proof_type": "automated_test",
       "evidence": "statistics/summary_test.go boundary fixtures (equal/reversed ranges, empty keys, active spans, fractional 0.4s->0/0.8s->1) and TestStats_postgres_sessionTimeZone (WP03); statistics/summary2_test.go daily + midnight-crossing fixtures (WP04).",
       "pass_fail": "pass",
-      "verified_by": "qwen-review",
+      "verified_by": "user",
       "verified_at": "2026-10-25T00:00:00Z",
       "notes": "Verified: per-span rounding both dialects; session-TimeZone independence proven (timestamptz bounds); running spans excluded."
     },
@@ -30,7 +30,7 @@
       "proof_type": "automated_test",
       "evidence": "statistics/summary_test.go fixtures for multiple tags, duplicate filter matches, exclusion precedence, user isolation (WP03); statistics/summary2_test.go Include/Exclude + zero-fill daily scenarios (WP04).",
       "pass_fail": "pass",
-      "verified_by": "qwen-review",
+      "verified_by": "user",
       "verified_at": "2026-10-25T00:00:00Z",
       "notes": "Verified on both engines with fixed expected seconds."
     },
@@ -40,7 +40,7 @@
       "proof_type": "automated_test",
       "evidence": "statistics/summary_test.go TestStats_errorPropagation (WP03) checks .Error on Raw().Scan() before zero-fill; forced execution failure returns non-nil error.",
       "pass_fail": "pass",
-      "verified_by": "qwen-review",
+      "verified_by": "user",
       "verified_at": "2026-10-25T00:00:00Z",
       "notes": "Verified: query error propagates to resolver, no fabricated empty result."
     },
@@ -50,7 +50,7 @@
       "proof_type": "automated_test",
       "evidence": "model/dashboard_test.go + model/device_test.go (WP02) cover string + []byte Scan, nil error, unsupported-type error, round-trip; dashboard/postgres_persistence_test.go + device/postgres_persistence_test.go exercise text + legacy bytea columns via lib/pq.",
       "pass_fail": "pass",
-      "verified_by": "qwen-review",
+      "verified_by": "user",
       "verified_at": "2026-10-25T00:00:00Z",
       "notes": "Verified: scanStringEnum accepts string and []byte; bytea path genuinely exercised on real columns."
     },
@@ -60,9 +60,9 @@
       "proof_type": "automated_test",
       "evidence": "dashboard/postgres_persistence_test.go + device/postgres_persistence_test.go lifecycle/reconnect tests on file-backed SQLite and PostgreSQL; TestStartupMigration_reopen_textAndBytea reopens both schema variants via database.New and asserts column types retained (WP02).",
       "pass_fail": "pass",
-      "verified_by": "qwen-review",
+      "verified_by": "user",
       "verified_at": "2026-10-25T00:00:00Z",
-      "notes": "Verified: values survive close/reopen; AutoMigrate does not convert bytea; model.All() FK ordering fixed for fresh-PG startup."
+      "notes": "Verified: values survive close/reopen; AutoMigrate does not convert bytea; model.All() FK ordering fixed for fresh-PG startup. Reconciliation 2026-10-28: the parent-mission finding that startup migration errors were swallowed (DRIFT-1/RISK-1) was closed by remediation WP03 (postgres-dashboard-review-fixes-01M5JRH2), which makes database.New propagate AutoMigrate errors and releases the owned pool (see docs/reviews/postgres-dashboard-remediation-evidence-2026-10-28.md); the actual-PG17 component remains open."
     },
     {
       "criterion_id": "FR-007",
@@ -70,7 +70,7 @@
       "proof_type": "automated_test",
       "evidence": ".github/workflows/build.yml postgres-test job (postgres:17 service, trust auth for pinned lib/pq, TRAGGO_TEST_POSTGRES_REQUIRED=1) + Makefile test-postgres target + hack/test-databases.sh (WP05); WP01 shared fixtures.",
       "pass_fail": "pass",
-      "verified_by": "qwen-review",
+      "verified_by": "user",
       "verified_at": "2026-10-25T00:00:00Z",
       "notes": "Verified: required-mode rejects invalid/bad DSN (exit 1); local pipeline runs SQLite+PG; remote GitHub Actions run remains a CI follow-up."
     },
@@ -80,7 +80,7 @@
       "proof_type": "documentation",
       "evidence": "docs/postgres-dashboard-rollout.md (WP06) covers T021-T024: config, immutable image procedure (baseline reconciliation, build tooling, source commit + digest, rollback), external manifest change follow-up, operational acceptance + rollback checklist. README.md PostgreSQL support section.",
       "pass_fail": "pass",
-      "verified_by": "qwen-review",
+      "verified_by": "user",
       "verified_at": "2026-10-25T00:00:00Z",
       "notes": "Verified: runbook accurate, no invented facts (external repo/digest recorded as follow-ups), does not claim deployment."
     }

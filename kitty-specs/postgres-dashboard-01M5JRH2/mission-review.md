@@ -116,3 +116,34 @@ All 8 FRs are implemented and covered by real, behavior-constraining tests on bo
 
 - `spec-kitty retrospect summary` — cross-mission aggregation (read-only).
 - `spec-kitty agent retrospect synthesize --mission postgres-dashboard-01M5JRH2` — inspect proposals (dry-run by default); use `--apply` only to commit staged proposals.
+
+---
+
+## Reconciliation addendum (2026-10-28)
+
+**WP**: WP06 `postgres-dashboard-review-fixes-01M5JRH2`
+**Common evidence**: `docs/reviews/postgres-dashboard-remediation-evidence-2026-10-28.md` (WP05)
+**Tested remediation revision**: `38ae5e9e3818030b1da410a652fdb012877d2973`
+(`feat(WP04): wire launcher CI gates and enforce PostgreSQL live-suite manifest`, branch
+`kitty/mission-postgres-dashboard-review-fixes-01M5JRH2-lane-e`)
+**Curator**: curator-carla (WP06)
+
+This addendum reconciles each source-local finding from **this** (Nessy CLI) report to the WP05
+evidence. The historical **PASS WITH NOTES** verdict above remains readable and unchanged. Where a
+component is marked **OPEN**, it is not claimed verified.
+
+| Finding (this report) | Maps to (remediation) | WP05 evidence | Current disposition |
+| --- | --- | --- | --- |
+| DRIFT-1 / RISK-1 — `database.New` swallows the AutoMigrate error | FR-004 / C-002 | `TestNew_closesOwnedPoolOnMigrationError`, `TestNew_cleanupRunsOnce`, `TestNew_migrationCauseSurvivesCloseFailure`, `TestMigrationFailure_sqlite` all PASS (SQLite). This also closes the Codex "silent-startup-failure" row. | **FIXED on SQLite**; real PG17 migration-failure path **NOT verified** (PG17 image unavailable) → PG17 component **OPEN**. |
+| RISK-2 — stale harness comment (`model.All()` ordering in `test/postgres.go`) | WP03 / T015 behavior | Harness now documents `database.New` running `AutoMigrate(model.All()...)` itself with propagation, and `model.All()` order already topologically sorted (users before tag_definitions); harness no longer owns a separate migration step. | **FIXED** |
+| Attribution hygiene — `acceptance-matrix.json` `verified_by: "qwen-review"` vs the human reviewer in the event log | FR-007 / T027 | Recorded parent-mission reviewers per `status.events.jsonl` (2026-10-25): human `user` approved WP01–WP06; an automated `qwen` review followed. Corrected in the parent acceptance-matrix and explained in `acceptance.md`. | **FIXED** (see `acceptance.md`); note `qwen` is an automated reviewer and is not presented as independent human review. |
+
+### Current scoped verdict
+
+This report's open items are closed as follows: DRIFT-1/RISK-1 is **fixed on SQLite** with the
+PG17 component still **OPEN**; RISK-2 is **fixed**; attribution hygiene is **fixed** via T027.
+The mandatory PostgreSQL 17 gate (FR-006 / NFR-002, "zero skipped PG cases") was **not executed**
+in this environment (no `postgres:17` image obtainable; Docker Hub TLS-blocked, mirror auth
+blocked) and therefore remains **OPEN**. External items (image digest, `traggo.yaml`/`65b29d3`
+manifest change, live rollout) remain separate follow-ups; Vikunja task 114 stays open. No
+deployment, image publication, external manifest edit or task-114 closure is implied.
