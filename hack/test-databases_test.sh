@@ -289,6 +289,21 @@ assert_eq "${LAUNCHER_EXIT}" "0"
 assert_not_contains "${LAUNCHER_OUT}" "${SENTINEL}"
 assert_not_contains "${LAUNCHER_OUT}" "postgres://u:${SENTINEL}"
 
+# The version-probe helper file must NOT be a dotfile (leading '.' or '_').
+# Go ignores such filenames, which would silently break the real `go run` of
+# the PG17 server_version_num gate (the fake `go` double would mask it).
+helper_assign="$(grep -oE 'helper="\$\{SCRIPT_DIR\}/[^"]+\.go"' "${LAUNCHER}" | head -1)"
+if [[ -z "${helper_assign}" ]]; then
+  fail "could not locate the version-probe helper assignment in the launcher"
+fi
+helper_name="${helper_assign##*/}"
+helper_name="${helper_name%\"}"
+case "${helper_name}" in
+  .*|_*)
+    fail "version-probe helper must not be a dotfile/underscore filename, got [${helper_name}]"
+    ;;
+esac
+
 echo "test-databases_test.sh: ${TESTS_RUN} cases run, ${TESTS_FAILED} failed, ${TESTS_SKIPPED} skipped"
 if [[ "${TESTS_FAILED}" -ne 0 ]]; then
   exit 1

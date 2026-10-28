@@ -188,7 +188,7 @@ redact_output() {
 check_server_version() {
   local dsn="$1"
   local helper out major
-  helper="${SCRIPT_DIR}/.pgversion-$$.go"
+  helper="${SCRIPT_DIR}/pgversion_$$.go"
   cat >"${helper}" <<'GOEOF'
 package main
 
