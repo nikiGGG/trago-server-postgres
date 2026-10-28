@@ -23,6 +23,7 @@
   "purpose_context": "This mission advances postgres dashboard review fixes on plan/postgres-dashboard so stakeholders can track the work from mission creation onward.",
   "purpose_tldr": "postgres dashboard review fixes",
   "slug": "postgres-dashboard-review-fixes-01M5ZJTF",
+  "status_phase": "1",
   "target_branch": "plan/postgres-dashboard",
   "topology": "single_branch",
   "vcs": "git",
