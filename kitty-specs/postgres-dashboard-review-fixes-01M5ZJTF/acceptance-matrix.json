@@ -2,78 +2,104 @@
   "mission_slug": "postgres-dashboard-review-fixes-01M5ZJTF",
   "mission_number": "",
   "mission_type": "software-dev",
-  "overall_verdict": "pending",
+  "overall_verdict": "pass",
   "criteria": [
     {
       "criterion_id": "FR-001",
-      "description": "Verify FR-001 is satisfied",
+      "description": "Restrict launcher and CI disposable PostgreSQL published ports to loopback, retaining working connectivity, custom-port support, and cleanup.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "hack/test-databases_test.sh (WP01) 16/16 cases pass, incl. exact publish args assertion -p 127.0.0.1:${PORT}:5432 on default/custom ports and one cleanup for self-started containers; WP05 ran and retained shell regression evidence.",
+      "pass_fail": "pass",
+      "verified_by": "qwen",
+      "verified_at": "2026-10-28T00:00:00Z",
+      "notes": "Verified via WP01 review (cycle 1 and cycle-2 dotfile fix) and WP05 execution evidence."
     },
     {
       "criterion_id": "FR-002",
-      "description": "Verify FR-002 is satisfied",
+      "description": "Remove credential-bearing DSN logging on supported launcher paths, including launcher-controlled failure output; cover URL and keyword DSNs.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "hack/test-databases.sh (WP01) dsn_password parser + redact_output; WP05 negative checks: zero sentinel-password occurrences across success/setup-failure/test-failure/child-echo paths.",
+      "pass_fail": "pass",
+      "verified_by": "qwen",
+      "verified_at": "2026-10-28T00:00:00Z",
+      "notes": "Verified via WP01 review and WP05 execution evidence."
     },
     {
       "criterion_id": "FR-003",
-      "description": "Verify FR-003 is satisfied",
+      "description": "Preserve original fractional range identities and correct clipped, per-span rounded totals on SQLite and PostgreSQL through the existing statistics API. Distinct ranges cannot merge or disappear.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "statistics/summary.go (WP02) integer range_id per input position; shared SQLite/PG fixtures same-second fractional identities, duplicate+empty ranges, sum-of-rounded vs rounded-sum pass; real PG run: statistics 101 tests / 0 skipped.",
+      "pass_fail": "pass",
+      "verified_by": "qwen",
+      "verified_at": "2026-10-28T00:00:00Z",
+      "notes": "Verified via WP02 review and real PostgreSQL execution (statistics 101 pass / 0 skip)."
     },
     {
       "criterion_id": "FR-004",
-      "description": "Verify FR-004 is satisfied",
+      "description": "Return production AutoMigrate failures to startup callers, prevent successful startup after failed migration, and release resources opened by failed initialization.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "database/database.go (WP03) New checks migrateSchema error, closes owned pool, returns wrapped cause; TestMigrationFailure_sqlite/_postgres, pool-close/cleanup/cause tests pass on SQLite; real PG database package passes.",
+      "pass_fail": "pass",
+      "verified_by": "qwen",
+      "verified_at": "2026-10-28T00:00:00Z",
+      "notes": "Verified via WP03 review and real PostgreSQL database package run."
     },
     {
       "criterion_id": "FR-005",
-      "description": "Verify FR-005 is satisfied",
+      "description": "Add behavior-constraining regressions for FR-001-004, including shared real-engine fractional fixtures and real SQLite/PostgreSQL migration failures. Tests must distinguish fixed from defective behavior.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "WP01-03 regression suites distinguish fixed vs defective (verified RED on pre-fix, GREEN after); WP02 shared SQLite/PG fractional fixtures; WP03 real post-connect migration-conflict fixtures.",
+      "pass_fail": "pass",
+      "verified_by": "qwen",
+      "verified_at": "2026-10-28T00:00:00Z",
+      "notes": "Verified via WP01-03 reviews."
     },
     {
       "criterion_id": "FR-006",
-      "description": "Verify FR-006 is satisfied",
+      "description": "Execute and retain fresh SQLite, required PostgreSQL, and full lint/test evidence after required generation/UI preparation. Missing/unusable PostgreSQL configuration must fail its dedicated gate.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "WP05 fresh SQLite suite, launcher 16/16, make lint, make test (Go race+coverage, frontend 2/2) all pass; WP04 checker (hack/check-postgres-results.go) enforces manifest and rejects omitted/skipped suites; real PostgreSQL run on available postgres:18 (all six packages pass, 0 skips).",
+      "pass_fail": "pass",
+      "verified_by": "qwen",
+      "verified_at": "2026-10-28T00:00:00Z",
+      "notes": "Environment note: the required major is PostgreSQL 17, but no postgres:17 image was obtainable (Docker Hub TLS-blocked; corporate mirror auth unavailable). Per operator direction, the real PostgreSQL gate was executed against the available postgres:18 (docker-proxy.artifactory.tcsbank.ru/postgres:18) from the same mirror family; all fixtures pass and zero PostgreSQL cases skip. The strict-17 major verification remains an environment-open item documented in WP05 evidence."
     },
     {
       "criterion_id": "FR-007",
-      "description": "Verify FR-007 is satisfied",
-      "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "description": "Reconcile both reports and affected acceptance evidence against the same remediation evidence; correct stale migration/order claims and inaccurate reviewer attribution using actual event records.",
+      "proof_type": "code_review",
+      "evidence": "docs/reviews/postgres-dashboard-mission-review-2026-10-27.md + addendum, kitty-specs/postgres-dashboard-01M5JRH2/mission-review.md, acceptance-matrix.json, acceptance.md (WP06); attribution corrected from qwen-review to user per status.events.jsonl; PG17 gap documented OPEN.",
+      "pass_fail": "pass",
+      "verified_by": "qwen",
+      "verified_at": "2026-10-28T00:00:00Z",
+      "notes": "Verified via WP06 review."
     }
   ],
-  "negative_invariants": []
+  "negative_invariants": [
+    {
+      "invariant_id": "NFR-001",
+      "description": "Zero non-loopback published database addresses; zero sentinel-password occurrences in captured launcher stdout/stderr on tested success/failure paths.",
+      "result": "confirmed_absent",
+      "evidence": "WP01 launcher enforces 127.0.0.1:${PORT}:5432; WP05 negative checks confirm zero non-loopback addresses and zero sentinel occurrences.",
+      "verified_by": "qwen",
+      "verified_at": "2026-10-28T00:00:00Z"
+    },
+    {
+      "invariant_id": "NFR-002",
+      "description": "Zero skipped PostgreSQL cases in required PostgreSQL verification. Every required command exits 0.",
+      "result": "confirmed_absent",
+      "evidence": "Real PostgreSQL run on available postgres:18: statistics 101 pass / 0 skip; all six packages ok. Launcher 16/16, checker tests pass.",
+      "verified_by": "qwen",
+      "verified_at": "2026-10-28T00:00:00Z",
+      "notes": "Zero skips confirmed on the available postgres:18 engine. The strict major-17 engine remains an environment-open item (see FR-006 note)."
+    },
+    {
+      "invariant_id": "NFR-003",
+      "description": "Every scoped review finding has a status and revision-bound evidence reference; command records include exit status and applicable test/skip summaries.",
+      "result": "confirmed_absent",
+      "evidence": "WP06 reconciled every source-local finding with a disposition and revision-bound reference (tested commit 38ae5e9); WP05 evidence records exit statuses and test/skip counts.",
+      "verified_by": "qwen",
+      "verified_at": "2026-10-28T00:00:00Z"
+    }
+  ]
 }
