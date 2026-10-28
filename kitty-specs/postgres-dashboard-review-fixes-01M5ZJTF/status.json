@@ -190,7 +190,8 @@
       "last_transition_at": "2026-10-27T22:47:34.379754+00:00",
       "model": "__resolved_model_absent__",
       "notes": [
-        "Ready for review: reconciled both historical reviews + acceptance provenance against WP05 evidence"
+        "Ready for review: reconciled both historical reviews + acceptance provenance against WP05 evidence",
+        "Review passed: WP06 reconciliation is honest and complete. All Codex findings (RISK-1, RISK-2, DRIFT-1, GAP-1/F-4, silent-startup-failure, F-5, F-6) and Nessy findings (DRIFT-1/RISK-1, RISK-2, attribution hygiene) map to matching WP05 evidence with correct scoped verdicts. PG17 gate transparently marked OPEN (image unavailable) with no fabricated claims; task 114 kept open; F-5/F-6 deferred. Attribution corrected from non-identity 'qwen-review' to recorded human reviewer 'user' (verified in status.events.jsonl); WP01 dotfile fix commit 659cd04 correctly recorded as not yet on plan/postgres-dashboard. Only the 4 owned files changed; JSON valid; historical FAIL/PASS-WITH-NOTES verdicts preserved."
       ],
       "provider": "__resolved_provider_absent__",
       "review_result": {
