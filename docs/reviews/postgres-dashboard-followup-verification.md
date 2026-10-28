@@ -83,3 +83,58 @@ TRAGGO_TEST_PG_IMAGE=your-mirror/postgres:18 make test-postgres
 
 Закрывать замечания ревью следует после успешного выполнения этих команд на
 новых исходниках. Отдельный прогон PostgreSQL 17 не требуется.
+
+## Фактический прогон на полном тулчейне (2026-10-29)
+
+Окружение с полным набором инструментов: Go `go1.25.5 darwin/arm64`, Docker
+`27.3.1`, Python `3.13.5`, Node `v22.20.0`, Yarn, Bash. Диспозиционный контейнер
+PostgreSQL 18 взят из корпоративного зеркала
+`docker-proxy.artifactory.tcsbank.ru/postgres:18` (`TRAGGO_TEST_PG_IMAGE`) и
+запущен на свободном порту 55435 (`TRAGGO_TEST_PG_PORT`) — дефолтный порт 55432
+на этой машине занят (ssh-туннель), это окружение, а не дефект кода.
+
+Исходники: `git rev-parse HEAD` = `6b5996c5afd6bc0d6604a226dc81e66ae75aed46`
+(ветка `plan/postgres-dashboard`), рабочий каталог чистый, изменений в нём нет.
+
+| Проверка | Команда | Результат |
+|---|---|---|
+| Launcher shell suite | `make test-database-launcher` | **27/27** (0 failed, 0 skipped) |
+| Go-тесты hack (checker) | `go test -count=1 ./hack/...` | ok |
+| Live PostgreSQL gate | `make test-postgres` | **20/20 live suites, 8/8 children, 0 skips, exit 0** |
+| TEST-1 SQLite | `go test ./statistics/ -run TestStats$` | pass; `fractional_sum-of-rounded_vs_rounded-sum` = 2s |
+| Redaction boundaries | `hack/redact-postgres-output.py` (URL userinfo/query, keyword с пробелами и `\`, JSON-escaped, неразбираемая DSN) | всё корректно; fail-closed на неразбираемой DSN |
+| Shell syntax | `bash -n hack/test-databases.sh hack/test-databases_test.sh` | exit 0 |
+| Whitespace | `git diff --check` | exit 0 |
+
+Вывод gate:
+
+```
+PostgreSQL result manifest summary:
+  required live suites: 20/20 passed
+  required children:    8/8 passed
+  live-suite skips:     0 (any is a failure)
+  server-free skips:    0 (informational, excluded)
+```
+
+Статус по пунктам ревью:
+- **RISK-1** — подтверждён поведением фильтра на всех граничных форматах
+  (URL userinfo/query, keyword-пароль с пробелами вокруг `=` и backslash-
+  экранированием, JSON-экранированный вывод); неразбираемая DSN даёт
+  `error: output suppressed` и exit 1.
+- **RISK-2** — version probe захватывает/фильтрует оба потока, сохраняет код
+  завершения, DSN передаётся через `TRAGGO_TEST_POSTGRES_DSN`; реальный сервер
+  major 18 принят (допустимы 17/18).
+- **RISK-3** — live gate: все 20 обязательных roots и 8 children завершились
+  pass, ноль пропусков; checker-тесты в `./hack/...` зелёные (включая
+  `TestStats2FractionalSuitesAreMandatory` и `TestUnlistedPostgresTestsCannotSkip...`).
+- **TEST-1** — `fractional_sum-of-rounded_vs_rounded-sum`: два отрезка по 0,6 с
+  в одной группе `type=review` дают 2 с (sum-of-rounded), а не 1 с.
+- **make test-postgres** — `SHELL := /bin/bash` и `set -o pipefail` в Makefile;
+  ненулевой exit launcher'а распространяется через pipeline (проверено на
+  провале из-за занятого порта).
+
+Не запускались здесь: `make generate`, `make lint` (goimports/vet/yarn) и полный
+`make test` (race/coverage backend + UI). Они не входят в объём ревью-фиксов и
+покрывают более широкий pipeline; два целевых гейта документа
+(`test-database-launcher` и `test-postgres`) на реальных исходниках зелёные.
+Отдельный прогон PostgreSQL 17 не требуется (решение пользователя: PostgreSQL 18).
