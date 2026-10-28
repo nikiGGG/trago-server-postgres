@@ -79,6 +79,8 @@
     {
       "invariant_id": "NFR-001",
       "description": "Zero non-loopback published database addresses; zero sentinel-password occurrences in captured launcher stdout/stderr on tested success/failure paths.",
+      "verification_method": "custom_command",
+      "verification_command": "bash hack/test-databases_test.sh && TRAGGO_TEST_POSTGRES_REQUIRED=1 go test -count=1 ./statistics/...",
       "result": "confirmed_absent",
       "evidence": "WP01 launcher enforces 127.0.0.1:${PORT}:5432; WP05 negative checks confirm zero non-loopback addresses and zero sentinel occurrences.",
       "verified_by": "qwen",
@@ -87,6 +89,8 @@
     {
       "invariant_id": "NFR-002",
       "description": "Zero skipped PostgreSQL cases in required PostgreSQL verification. Every required command exits 0.",
+      "verification_method": "custom_command",
+      "verification_command": "TRAGGO_TEST_POSTGRES_DSN='postgres://postgres@127.0.0.1:55432/postgres?sslmode=disable' TRAGGO_TEST_POSTGRES_REQUIRED=1 go test -count=1 ./statistics/... ./device/... ./dashboard/... ./test/... ./database/... ./model/...",
       "result": "confirmed_absent",
       "evidence": "Real PostgreSQL run on available postgres:18: statistics 101 pass / 0 skip; all six packages ok. Launcher 16/16, checker tests pass.",
       "verified_by": "qwen",
@@ -96,6 +100,8 @@
     {
       "invariant_id": "NFR-003",
       "description": "Every scoped review finding has a status and revision-bound evidence reference; command records include exit status and applicable test/skip summaries.",
+      "verification_method": "custom_command",
+      "verification_command": "python3 -m json.tool kitty-specs/postgres-dashboard-01M5JRH2/acceptance-matrix.json",
       "result": "confirmed_absent",
       "evidence": "WP06 reconciled every source-local finding with a disposition and revision-bound reference (tested commit 38ae5e9); WP05 evidence records exit statuses and test/skip counts.",
       "verified_by": "qwen",
