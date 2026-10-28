@@ -1,6 +1,8 @@
 {
+  "accept_commit": "81cf003a6ebff74c618b8043c35a59104f481b02",
   "acceptance_history": [
     {
+      "accept_commit": "81cf003a6ebff74c618b8043c35a59104f481b02",
       "acceptance_mode": "pr",
       "accepted_at": "2026-10-28T04:38:04.361504+00:00",
       "accepted_by": "n.gryaznev",
