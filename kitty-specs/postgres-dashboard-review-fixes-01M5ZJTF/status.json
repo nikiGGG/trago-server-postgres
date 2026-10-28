@@ -1,16 +1,16 @@
 {
-  "event_count": 47,
-  "last_event_id": "01M60CZ4EK8BTX3XJZYV6KVEM3",
-  "materialized_at": "2026-10-28T04:40:49.363185+00:00",
+  "event_count": 48,
+  "last_event_id": "01M60CZ8E29YZPVKMFQZN166A8",
+  "materialized_at": "2026-10-28T04:40:53.442154+00:00",
   "mission_number": "",
   "mission_slug": "postgres-dashboard-review-fixes-01M5ZJTF",
   "mission_type": "software-dev",
   "summary": {
-    "approved": 1,
+    "approved": 0,
     "blocked": 0,
     "canceled": 0,
     "claimed": 0,
-    "done": 5,
+    "done": 6,
     "for_review": 0,
     "in_progress": 0,
     "in_review": 0,
@@ -163,7 +163,8 @@
       "model": "__resolved_model_absent__",
       "notes": [
         "Ready for review: evidence committed 8c81f4a. NOTE: real PG17 gate NOT executed - no postgres:17 image available (Docker Hub TLS-blocked, mirror auth blocked) and WP01 launcher version-probe dotfile defect (hack/test-databases.sh:191) blocks real gating. SQLite+launcher-suite+negative checks+full lint/test all pass. FR-006/NFR-002 gap open.",
-        "Review passed: Evidence is honest, revision-bound (tested commit 38ae5e9), every claimed pass backed by retained /tmp/wp05-evidence logs (SQLite 16/16 launcher, PG17 blocker with Docker TLS error + 0/18 gate, negative creds/required checks, make lint+test exit 0). PG17/zero-skip gap (FR-006/NFR-002) transparently left OPEN, not claimed; WP01 dotfile defect (.pgversion-*.go ignored by Go) reproduced and routed. In-scope: only owned evidence file changed. Anti-pattern checklist PASS/N-A. Gaps clearly recorded for downstream."
+        "Review passed: Evidence is honest, revision-bound (tested commit 38ae5e9), every claimed pass backed by retained /tmp/wp05-evidence logs (SQLite 16/16 launcher, PG17 blocker with Docker TLS error + 0/18 gate, negative creds/required checks, make lint+test exit 0). PG17/zero-skip gap (FR-006/NFR-002) transparently left OPEN, not claimed; WP01 dotfile defect (.pgversion-*.go ignored by Go) reproduced and routed. In-scope: only owned evidence file changed. Anti-pattern checklist PASS/N-A. Gaps clearly recorded for downstream.",
+        "Done override: Mission integrated into target branch plan/postgres-dashboard"
       ],
       "provider": "__resolved_provider_absent__",
       "review_result": {
@@ -188,10 +189,10 @@
       "agent": "qwen",
       "agent_profile": "__resolved_profile_absent__",
       "agent_profile_version": "__resolved_profile_version_absent__",
-      "force_count": 0,
-      "lane": "approved",
-      "last_event_id": "01M5ZRRA7B50TQSRHW2M1NQDNQ",
-      "last_transition_at": "2026-10-27T22:47:34.379754+00:00",
+      "force_count": 1,
+      "lane": "done",
+      "last_event_id": "01M60CZ8E29YZPVKMFQZN166A8",
+      "last_transition_at": "2026-10-28T04:40:53.442154+00:00",
       "model": "__resolved_model_absent__",
       "notes": [
         "Ready for review: reconciled both historical reviews + acceptance provenance against WP05 evidence",
