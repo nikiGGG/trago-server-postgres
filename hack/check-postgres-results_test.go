@@ -337,3 +337,57 @@ func TestRunReadsFromFileArgument(t *testing.T) {
 		t.Fatalf("expected summary in stdout:\n%s", stdout.String())
 	}
 }
+
+// Explicit identities avoid a self-fulfilling test that only enumerates the manifest.
+func TestStats2FractionalSuitesAreMandatory(t *testing.T) {
+	for _, name := range []string{
+		"TestStats2_single_fractional_postgres",
+		"TestStats2_single_fractional_postgres_sessionTimeZone",
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, action := range []string{"absent", "skip"} {
+				stream := withoutEvents(goodStream(), modulePrefix+"statistics", name)
+				if action == "skip" {
+					stream = replaceTerminal(stream, modulePrefix+"statistics", name, "skip")
+				}
+				code, out := runChecker(t, stream)
+				if code == 0 || !strings.Contains(out, name) {
+					t.Fatalf("%s suite must fail: %s", action, out)
+				}
+			}
+		})
+	}
+}
+
+func TestUnlistedPostgresTestsCannotSkipOrDisappearMidRun(t *testing.T) {
+	for _, name := range []string{"TestFuture_postgres", "TestFuture_pgReconnect/nested"} {
+		for _, action := range []string{"skip", "fail", "incomplete", "skip-without-run"} {
+			stream := goodStream()
+			if action != "skip-without-run" {
+				stream += ev("run", modulePrefix+"statistics", name) + "\n"
+			}
+			if action != "incomplete" {
+				terminal := action
+				if action == "skip-without-run" {
+					terminal = "skip"
+				}
+				stream += ev(terminal, modulePrefix+"statistics", name) + "\n"
+			}
+			code, out := runChecker(t, stream)
+			if code == 0 || !strings.Contains(out, name) {
+				t.Fatalf("%s %s must fail: %s", name, action, out)
+			}
+		}
+	}
+}
+
+func TestUnlistedPostgresPassAndServerFreeSkipsAllowed(t *testing.T) {
+	stream := goodStream() + ev("run", modulePrefix+"statistics", "TestFuture_postgres") + "\n" +
+		ev("pass", modulePrefix+"statistics", "TestFuture_postgres") + "\n"
+	stream = replaceTerminal(stream, modulePrefix+"test", "TestPostgresConfigFromEnv", "skip")
+	stream += ev("skip", modulePrefix+"test", "TestPostgresConfigFromEnv/server_free_child") + "\n"
+	code, out := runChecker(t, stream)
+	if code != 0 {
+		t.Fatalf("passing live suite and explicitly server-free skips should pass: %s", out)
+	}
+}

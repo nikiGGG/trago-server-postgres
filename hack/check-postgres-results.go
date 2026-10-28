@@ -79,6 +79,8 @@ var postgresManifest = []requiredPackage{
 			},
 			{name: "TestStats2_daily_postgres"},
 			{name: "TestStats2_daily_postgres_sessionTimeZone"},
+			{name: "TestStats2_single_fractional_postgres"},
+			{name: "TestStats2_single_fractional_postgres_sessionTimeZone"},
 			{name: "TestMidnightCrossing_manualHalfOpen_postgres"},
 		},
 	},
@@ -195,6 +197,10 @@ func (o *observedResult) ingest(r io.Reader) {
 				o.pkgTerminal[short] = ev.Action
 			} else {
 				o.terminal[identity(ev.Package, ev.Test)] = ev.Action
+				if o.allTests[short] == nil {
+					o.allTests[short] = map[string]bool{}
+				}
+				o.allTests[short][ev.Test] = true
 			}
 		}
 	}
@@ -326,6 +332,36 @@ func (o *observedResult) validate() *report {
 						rep.addf("descendant %s.%s of required suite is missing a terminal event (truncated stream)", shortPkg, test)
 					}
 				}
+			}
+		}
+	}
+
+	// Also enforce newly added PostgreSQL suites outside the manifest. Missing
+	// expected roots are checked above; observed live tests cannot silently skip
+	// merely because the manifest has not yet been updated for their names.
+	for shortPkg, tests := range o.allTests {
+		for name := range tests {
+			root := strings.SplitN(name, "/", 2)[0]
+			if serverFreeTests[shortPkg+"."+root] {
+				continue
+			}
+			if _, required := requiredRoots[shortPkg][root]; required {
+				continue // already checked, including descendants
+			}
+			lower := strings.ToLower(root)
+			if !strings.Contains(lower, "postgres") && !strings.Contains(lower, "_pg") {
+				continue
+			}
+			key := identity(modulePrefix+shortPkg, name)
+			switch o.terminal[key] {
+			case "pass":
+			case "skip":
+				rep.skippedDescendants++
+				rep.addf("live PostgreSQL test %s.%s was skipped", shortPkg, name)
+			case "fail":
+				rep.addf("live PostgreSQL test %s.%s failed", shortPkg, name)
+			default:
+				rep.addf("live PostgreSQL test %s.%s is missing a terminal pass event", shortPkg, name)
 			}
 		}
 	}

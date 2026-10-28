@@ -29,19 +29,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Dedicated, REQUIRED PostgreSQL 17 job (FR-006 / WP04).
+  # Dedicated, REQUIRED PostgreSQL 18 job (FR-006 / WP04).
   #
   # The `build` job above still covers SQLite (and the full pipeline). This job
   # is the mandatory PostgreSQL gate: it runs the exact same cross-database
   # regression/acceptance fixtures (statistics incl. session-TZ and fractional
   # children, model, dashboard incl. text/bytea and reopen, device, test,
-  # database migration/initialization) against a disposable PostgreSQL 17 server
+  # database migration/initialization) against a disposable PostgreSQL 18 server
   # AND SQLite in a single invocation, through the same safe launcher used
   # locally.
   #
-  # The launcher (hack/test-databases.sh) starts its own postgres:17 container
+  # The launcher (hack/test-databases.sh) starts its own postgres:18 container
   # on the Ubuntu host Docker runtime, published on IPv4 loopback only,
-  # health-checks it, verifies the connected server is actually major 17,
+  # health-checks it, verifies the connected server is actually major 17 or 18,
   # cleans up on every exit, and forces required-mode. A missing/unusable
   # connection, a failed harness setup, or any skipped PostgreSQL suite makes
   # the job FAIL - a green job can never be SQLite-only. The `go test -json`
@@ -66,8 +66,8 @@ jobs:
       # publishing, credential-safe output, required-mode failure and cleanup.
       - name: Launcher shell regression suite
         run: make test-database-launcher
-      # SQLite + PostgreSQL 17 regression/acceptance suites (required). The
+      # SQLite + PostgreSQL 18 regression/acceptance suites (required). The
       # launcher self-starts the disposable server on the Ubuntu host Docker
       # runtime and the JSON result stream is validated by the result checker.
-      - name: SQLite + PostgreSQL 17 regression/acceptance suites (required)
+      - name: SQLite + PostgreSQL 18 regression/acceptance suites (required)
         run: make test-postgres

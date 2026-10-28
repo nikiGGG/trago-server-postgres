@@ -62,7 +62,7 @@ test-database-launcher:
 # variables it reads (TRAGGO_TEST_POSTGRES_DSN / TRAGGO_TEST_PG_IMAGE /
 # TRAGGO_TEST_PG_PORT / TRAGGO_TEST_PG_PACKAGES / TRAGGO_TEST_GO_JSON).
 #
-# Without TRAGGO_TEST_POSTGRES_DSN the script starts a disposable postgres:17
+# Without TRAGGO_TEST_POSTGRES_DSN the script starts a disposable postgres:18
 # container itself; with a DSN it reuses the running server. All six mandatory
 # packages are exercised (statistics, device, dashboard, test, database,
 # model), the child go test runs with -json (TRAGGO_TEST_GO_JSON=1), and the
@@ -72,6 +72,7 @@ test-database-launcher:
 # always forced to 1 inside the launcher so a green run provably executed real
 # PostgreSQL fixtures.
 .PHONY: test-postgres
+test-postgres: SHELL := /bin/bash
 test-postgres:
 	set -o pipefail; TRAGGO_TEST_GO_JSON=1 TRAGGO_TEST_PG_PACKAGES="./statistics/... ./device/... ./dashboard/... ./test/... ./database/... ./model/..." ./hack/test-databases.sh | go run ./hack/check-postgres-results.go
 

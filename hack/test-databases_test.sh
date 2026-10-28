@@ -13,7 +13,7 @@
 #   * no credential-bearing DSN or password in any captured output across
 #     URL/quoted-keyword DSNs, success, setup failure, wrong-major and test
 #     failure paths, including a child that deliberately echoes a sentinel;
-#   * actual PostgreSQL major 17 is required (17 accepted, other majors
+#   * actual PostgreSQL major 17 or 18 is required (both accepted, other majors
 #     rejected) on both the disposable and reused paths;
 #   * JSON mode keeps child events machine-parseable on stdout with stage
 #     messages on stderr;
@@ -97,16 +97,17 @@ shift || true
 case "${sub}" in
   run)
     if [[ -n "${FAKE_GO_RUN_EXIT:-}" ]]; then
-      echo "error: connection refused" >&2
+      printf "error: connection refused %s\n" "${FAKE_CHILD_SECRET:-}" >&2
       exit "${FAKE_GO_RUN_EXIT}"
     fi
     printf 'major=%s\n' "${FAKE_GO_MAJOR:-17}"
     ;;
   test)
-    # Deliberately echo a sentinel credential to exercise launcher redaction.
+    # Use real JSON encoding so quotes/backslashes/control characters exercise
+    # the same representation as go test -json. Plain diagnostics use stderr.
     if [[ -n "${FAKE_CHILD_SECRET:-}" ]]; then
       echo "child leaked: ${FAKE_CHILD_SECRET}" >&2
-      printf '{"Action":"output","Test":"TestX_postgres","Output":"%s\\n"}\n' "${FAKE_CHILD_SECRET}"
+      python3 -c 'import json, os; print(json.dumps({"Action":"output", "Test":"TestX_postgres", "Output":os.environ["FAKE_CHILD_SECRET"]+"\n"}, separators=(",", ":")))'
     fi
     if [[ "$*" == *"-json"* ]]; then
       printf '{"Action":"run","Test":"TestX_postgres"}\n'
@@ -125,7 +126,12 @@ case "${sub}" in
 esac
 FAKE
 
-chmod +x "${FAKE_DIR}/docker" "${FAKE_DIR}/go"
+# Readiness is doubled too: exhausting retries must not cost a real minute.
+cat >"${FAKE_DIR}/sleep" <<'FAKE'
+#!/usr/bin/env bash
+exit 0
+FAKE
+chmod +x "${FAKE_DIR}/docker" "${FAKE_DIR}/go" "${FAKE_DIR}/sleep"
 
 # run_launcher executes the launcher with the doubled PATH, capturing stdout,
 # stderr and exit status into globals. Extra env assignments are passed through
@@ -169,7 +175,7 @@ SENTINEL="s3nt1n3l-pw-9x2"
 # ---- Test 1: default port, loopback publish, cleanup ------------------------
 run_launcher
 assert_eq "${LAUNCHER_EXIT}" "0"
-assert_contains "$(cat "${DOCKER_LOG}")" "-p 127.0.0.1:55432:5432 postgres:17"
+assert_contains "$(cat "${DOCKER_LOG}")" "-p 127.0.0.1:55432:5432 postgres:18"
 # Ensure no non-loopback publish mapping is ever used.
 if has_broad_publish; then
   fail "publish mapping was not restricted to loopback in:"$'\n'"$(cat "${DOCKER_LOG}")"
@@ -182,7 +188,7 @@ assert_not_contains "${LAUNCHER_OUT}" "postgres://postgres@127.0.0.1"
 # ---- Test 2: custom port stays on loopback ----------------------------------
 run_launcher TRAGGO_TEST_PG_PORT=56789
 assert_eq "${LAUNCHER_EXIT}" "0"
-assert_contains "$(cat "${DOCKER_LOG}")" "-p 127.0.0.1:56789:5432 postgres:17"
+assert_contains "$(cat "${DOCKER_LOG}")" "-p 127.0.0.1:56789:5432 postgres:18"
 assert_contains "${LAUNCHER_STDOUT}" "on 127.0.0.1:56789"
 
 # ---- Test 3: reused URL DSN success leaks nothing ---------------------------
@@ -207,8 +213,8 @@ assert_eq "${LAUNCHER_EXIT}" "0"
 assert_not_contains "${LAUNCHER_OUT}" "${SENTINEL}"
 assert_not_contains "${LAUNCHER_OUT}" "postgres://"
 
-# ---- Test 6: quoted keyword with escaped quote leaks nothing ----------------
-escaped_dsn="host=127.0.0.1 user=u password='it''s ${SENTINEL}' dbname=postgres"
+# ---- Test 6: lib/pq backslash-escaped quote leaks nothing -------------------
+escaped_dsn="host=127.0.0.1 user=u password='it\\'s ${SENTINEL}' dbname=postgres"
 run_launcher TRAGGO_TEST_POSTGRES_DSN="${escaped_dsn}"
 assert_eq "${LAUNCHER_EXIT}" "0"
 assert_not_contains "${LAUNCHER_OUT}" "${SENTINEL}"
@@ -216,14 +222,14 @@ assert_not_contains "${LAUNCHER_OUT}" "${SENTINEL}"
 # ---- Test 7: wrong major is rejected (disposable path) ----------------------
 run_launcher FAKE_GO_MAJOR=16
 assert_eq "${LAUNCHER_EXIT}" "1"
-assert_contains "${LAUNCHER_STDERR}" "major 16, but major 17 is required"
+assert_contains "${LAUNCHER_STDERR}" "major 16, but major 17 or 18 is required"
 # Cleanup still runs for the self-started container after wrong-major failure.
 assert_eq "$(grep -c 'docker rm -f traggo-test-pg-' "${DOCKER_LOG}" || true)" "1"
 
 # ---- Test 8: wrong major is rejected (reused path) --------------------------
-run_launcher TRAGGO_TEST_POSTGRES_DSN="postgres://u:${SENTINEL}@127.0.0.1:55432/postgres?sslmode=disable" FAKE_GO_MAJOR=18
+run_launcher TRAGGO_TEST_POSTGRES_DSN="postgres://u:${SENTINEL}@127.0.0.1:55432/postgres?sslmode=disable" FAKE_GO_MAJOR=19
 assert_eq "${LAUNCHER_EXIT}" "1"
-assert_contains "${LAUNCHER_STDERR}" "major 18, but major 17 is required"
+assert_contains "${LAUNCHER_STDERR}" "major 19, but major 17 or 18 is required"
 assert_not_contains "${LAUNCHER_OUT}" "${SENTINEL}"
 assert_eq "$(grep -c 'docker rm -f' "${DOCKER_LOG}" || true)" "0"
 
@@ -269,15 +275,54 @@ assert_not_contains "$(cat "${GO_LOG}")" "./statistics/..."
 run_launcher
 assert_contains "$(cat "${GO_LOG}")" "./statistics/... ./device/... ./dashboard/... ./test/... ./database/... ./model/..."
 
+# ---- Additional credential-boundary and supported-major regressions --------
+for major in 17 18; do
+  run_launcher FAKE_GO_MAJOR="${major}"
+  assert_eq "${LAUNCHER_EXIT}" "0"
+done
+
+for dsn in \
+  "host=localhost user=u password='synthetic\\'quoted-secret'" \
+  "postgres://u@localhost/db?password=synthetic%27quoted-secret" \
+  "host=localhost user=u password = synthetic\\'quoted-secret"; do
+  for status in 0 7; do
+    run_launcher TRAGGO_TEST_POSTGRES_DSN="${dsn}" FAKE_CHILD_SECRET="synthetic'quoted-secret" FAKE_GO_TEST_EXIT="${status}" TRAGGO_TEST_GO_JSON=1
+    assert_eq "${LAUNCHER_EXIT}" "${status}"
+    assert_not_contains "${LAUNCHER_OUT}" "synthetic'quoted-secret"
+    assert_not_contains "${LAUNCHER_OUT}" "${dsn}"
+    printf '%s\n' "${LAUNCHER_STDOUT}" | python3 -c 'import json, sys; [json.loads(line) for line in sys.stdin if line.strip()]'
+  done
+done
+
+# JSON escaping must not hide a password from the filter or corrupt events.
+json_secret=$'synthetic"quoted\\secret\nnext-line'
+run_launcher TRAGGO_TEST_POSTGRES_DSN='postgres://u@localhost/db?password=synthetic%22quoted%5Csecret%0Anext-line' FAKE_CHILD_SECRET="${json_secret}" TRAGGO_TEST_GO_JSON=1
+assert_eq "${LAUNCHER_EXIT}" "0"
+assert_not_contains "${LAUNCHER_OUT}" "synthetic"
+printf '%s\n' "${LAUNCHER_STDOUT}" | python3 -c 'import json, sys; [json.loads(line) for line in sys.stdin if line.strip()]'
+
+run_launcher TRAGGO_TEST_POSTGRES_DSN="postgres://u:${SENTINEL}@localhost/db" FAKE_GO_RUN_EXIT=9 FAKE_CHILD_SECRET="${SENTINEL}"
+assert_eq "${LAUNCHER_EXIT}" "9"
+assert_not_contains "${LAUNCHER_OUT}" "${SENTINEL}"
+assert_contains "${LAUNCHER_STDERR}" "could not determine"
+# The real helper receives connection configuration through env, never argv.
+assert_not_contains "$(cat "${GO_LOG}")" "${SENTINEL}"
+
+# Unparseable input suppresses child diagnostics and fails closed.
+run_launcher TRAGGO_TEST_POSTGRES_DSN="host=localhost password='unterminated" FAKE_CHILD_SECRET="unterminated"
+assert_eq "${LAUNCHER_EXIT}" "1"
+assert_contains "${LAUNCHER_STDERR}" "output suppressed"
+assert_not_contains "${LAUNCHER_OUT}" "unterminated"
+
 # ---- T005: failure injection must still reject the reviewed defects ---------
 : >"${DOCKER_LOG}"
 # A loopback-only mapping must not be flagged.
-printf '%s\n' "docker run -d --name x -p 127.0.0.1:55432:5432 postgres:17" >>"${DOCKER_LOG}"
+printf '%s\n' "docker run -d --name x -p 127.0.0.1:55432:5432 postgres:18" >>"${DOCKER_LOG}"
 if has_broad_publish; then
   fail "loopback-only publish was mis-detected as broad"
 fi
 # A broad mapping (the reviewed defect) MUST be detected.
-printf '%s\n' "docker run -d --name y -p 0.0.0.0:55432:5432 postgres:17" >>"${DOCKER_LOG}"
+printf '%s\n' "docker run -d --name y -p 0.0.0.0:55432:5432 postgres:18" >>"${DOCKER_LOG}"
 if ! has_broad_publish; then
   fail "failure injection: broad publish mapping was not detected"
 fi

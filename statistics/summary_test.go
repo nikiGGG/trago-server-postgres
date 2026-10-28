@@ -328,20 +328,17 @@ func statsFixtures() []*testEntry {
 					entry("type", "review", 1*time.Second)),
 				result("2019-06-11T10:00:20.200Z", "2019-06-11T10:00:21.800Z",
 					entry("type", "review", 0*time.Second))),
-		// Two 0.6s spans distinguish sum-of-rounded durations from rounding the
-		// summed duration. Each clipped span rounds to 1s (sum-of-rounded = 2);
-		// rounding the summed 1.2s would yield 1. The correct per-span rounding
-		// must report 1s for each series.
+		// Two 0.6s spans in the SAME group distinguish sum-of-rounded (2)
+		// from rounded-sum (1). Separate tag values would not constrain this.
 		name("fractional sum-of-rounded vs rounded-sum").
 			Load(
 				ts("2019-06-11T10:00:00.000Z", 600*time.Millisecond, tag("type", "review")),
-				ts("2019-06-11T10:00:00.000Z", 600*time.Millisecond, tag("type", "work"))).
+				ts("2019-06-11T10:00:00.000Z", 600*time.Millisecond, tag("type", "review"))).
 			Keys("type").
 			Ranges(rangex("2019-06-11T10:00:00.000Z", "2019-06-11T10:00:01.000Z")).
 			Expected(
 				result("2019-06-11T10:00:00.000Z", "2019-06-11T10:00:01.000Z",
-					entry("type", "review", 1*time.Second),
-					entry("type", "work", 1*time.Second))),
+					entry("type", "review", 2*time.Second))),
 	}
 }
 

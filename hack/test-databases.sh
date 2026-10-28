@@ -19,8 +19,8 @@
 #     echoed to output. The full DSN and any password are redacted from captured
 #     child output before it is replayed, and temporary captures are removed on
 #     every exit.
-#   * The actual connected server must be PostgreSQL major 17. The default
-#     `postgres:17` image alone is not accepted evidence; the real
+#   * The actual connected server must be PostgreSQL major 17 or 18. The default
+#     `postgres:18` image alone is not accepted evidence; the real
 #     server_version_num is checked on both the disposable and the reused path.
 #   * Shell tracing is never enabled here.
 #
@@ -42,9 +42,9 @@
 #                                 fixtures.
 #   TRAGGO_TEST_PG_IMAGE          (optional) Docker image used when the script
 #                                 starts its own disposable server. Defaults to
-#                                 postgres:17. Override locally when postgres:17
+#                                 postgres:18. Override locally when postgres:18
 #                                 cannot be pulled (e.g. a corporate mirror only
-#                                 carries a different minor version).
+#                                 carries a different supported major version).
 #   TRAGGO_TEST_PG_PORT           (optional) host port for a self-started
 #                                 container. Defaults to 55432.
 #   TRAGGO_TEST_PG_PACKAGES       (optional) space-separated package paths to
@@ -65,6 +65,8 @@
 #     driver can connect. Never use trust authentication on a real database.
 #
 set -euo pipefail
+
+command -v python3 >/dev/null || { echo "error: Python 3 is required for credential-safe output" >&2; exit 1; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -110,84 +112,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# dsn_password extracts the password from a lib/pq connection string. Both URL
-# (postgres://...) and keyword/value forms are supported. Keyword values may be
-# single-quoted (with doubled single-quote escaping) and may contain spaces and
-# '=' characters, so a naive whitespace split is deliberately avoided. The
-# password is printed to stdout (empty if the DSN carries none).
-dsn_password() {
-  local dsn="$1"
-  printf '%s' "${dsn}" | perl - "${dsn}" <<'PERL'
-    my $dsn = $ARGV[0];
-    my $n = length $dsn;
-    my $i = 0;
-    my $pw = '';
-    my $found = 0;
-    if ($dsn =~ m{^(postgres|postgresql)://}) {
-      (my $userinfo) = $dsn =~ m{^[^:]+://([^@]*)@};
-      if (defined $userinfo && $userinfo =~ /:/) {
-        (my $enc) = $userinfo =~ /^[^:]*:(.*)$/;
-        $enc =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/ge;
-        $pw = $enc; $found = 1;
-      }
-    } else {
-      while ($i < $n) {
-        $i++ while $i < $n && substr($dsn,$i,1) =~ /[ \t]/;
-        last if $i >= $n;
-        my $eq = index($dsn, '=', $i);
-        last if $eq < 0;
-        my $key = substr($dsn, $i, $eq - $i);
-        $i = $eq + 1;
-        my $val = '';
-        if ($i < $n && substr($dsn,$i,1) eq "'") {
-          $i++;
-          my $valchars = '';
-          my $end = index($dsn, "'", $i);
-          while ($end >= 0) {
-            if (substr($dsn,$end+1,1) eq "'") {
-              $valchars .= substr($dsn, $i, $end - $i) . "'";
-              $i = $end + 2;
-              $end = index($dsn, "'", $i);
-            } else {
-              $valchars .= substr($dsn, $i, $end - $i);
-              $i = $end + 1;
-              $end = -1;
-            }
-          }
-          $val = $valchars;
-        } else {
-          my $ws = $i;
-          $ws++ while $ws < $n && substr($dsn,$ws,1) !~ /[ \t]/;
-          $val = substr($dsn, $i, $ws - $i);
-          $i = $ws;
-        }
-        if ($key eq 'password') { $pw = $val; $found = 1; }
-      }
-    }
-    print $pw if $found;
-PERL
-}
-
-# redact_output replaces the full DSN and the password (both supported forms)
-# with fixed markers. Child output is replayed only through this filter so a
-# child that echoes a credential cannot leak it into captured launcher output.
+# Redact both plain diagnostics and JSON-escaped test output. Never pass the
+# DSN or password in process arguments. Python 3 uses only its standard library.
 redact_output() {
-  local dsn="$1" pw="$2"
-  perl -e '
-    my ($dsn, $pw) = @ARGV;
-    while (my $line = <STDIN>) {
-      if (length($dsn)) { $line =~ s/\Q$dsn\E/<redacted DSN>/g; }
-      if (length($pw))  { $line =~ s/\Q$pw\E/<redacted>/g; }
-      print $line;
-    }
-  ' "${dsn}" "${pw}"
+  TRAGGO_TEST_POSTGRES_DSN="$1" python3 "${SCRIPT_DIR}/redact-postgres-output.py"
 }
 
 # check_server_version queries the real server_version_num through the supplied
-# connection and fails unless it is PostgreSQL major 17.
+# connection and fails unless it is PostgreSQL major 17 or 18.
 check_server_version() {
   local dsn="$1"
-  local helper out major
+  local helper out major status=0
   helper="${SCRIPT_DIR}/pgversion_$$.go"
   cat >"${helper}" <<'GOEOF'
 package main
@@ -201,11 +136,11 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: pgversion <dsn>")
+	if os.Getenv("TRAGGO_TEST_POSTGRES_DSN") == "" {
+		fmt.Fprintln(os.Stderr, "missing PostgreSQL connection settings")
 		os.Exit(2)
 	}
-	db, err := sql.Open("postgres", os.Args[1])
+	db, err := sql.Open("postgres", os.Getenv("TRAGGO_TEST_POSTGRES_DSN"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: open connection: %v\n", err)
 		os.Exit(1)
@@ -220,17 +155,26 @@ func main() {
 }
 GOEOF
   VERSION_HELPER="${helper}"
-  out="$(cd "${ROOT_DIR}" && go run "${helper}" "${dsn}")" || {
+  CAPTURE_STDOUT="$(mktemp)"
+  CAPTURE_STDERR="$(mktemp)"
+  (
+    cd "${ROOT_DIR}"
+    TRAGGO_TEST_POSTGRES_DSN="${dsn}" go run "${helper}"
+  ) >"${CAPTURE_STDOUT}" 2>"${CAPTURE_STDERR}" || status=$?
+  # Sanitize even failed setup diagnostics before replaying them.
+  out="$(redact_output "${dsn}" <"${CAPTURE_STDOUT}")" || return 1
+  redact_output "${dsn}" <"${CAPTURE_STDERR}" >&2 || return 1
+  if [[ "${status}" -ne 0 ]]; then
     echo "error: could not determine the connected PostgreSQL server version" >&2
-    return 1
-  }
+    return "${status}"
+  fi
   major="$(printf '%s\n' "${out}" | sed -n 's/^major=\([0-9][0-9]*\)$/\1/p')"
   if [[ -z "${major}" ]]; then
     echo "error: could not determine the connected PostgreSQL server major version" >&2
     return 1
   fi
-  if [[ "${major}" != "17" ]]; then
-    echo "error: connected PostgreSQL server is major ${major}, but major 17 is required" >&2
+  if [[ "${major}" != "17" && "${major}" != "18" ]]; then
+    echo "error: connected PostgreSQL server is major ${major}, but major 17 or 18 is required" >&2
     return 1
   fi
 }
@@ -239,11 +183,9 @@ GOEOF
 # through the environment, captures both streams privately, replays them through
 # the redaction filter and returns the child's original exit status.
 run_suite() {
-  local dsn="$1" pw status json_flag=""
-  pw="$(dsn_password "${dsn}")"
+  local dsn="$1" status json_flag=""
   if [[ -n "${JSON}" ]]; then json_flag="-json"; fi
-  CAPTURE_STDOUT="$(mktemp)"
-  CAPTURE_STDERR="$(mktemp)"
+  # Reuse the probe captures so cleanup tracks all private files.
   set +e
   (
     cd "${ROOT_DIR}"
@@ -253,8 +195,8 @@ run_suite() {
   ) >"${CAPTURE_STDOUT}" 2>"${CAPTURE_STDERR}"
   status=$?
   set -e
-  redact_output "${dsn}" "${pw}" <"${CAPTURE_STDOUT}"
-  redact_output "${dsn}" "${pw}" <"${CAPTURE_STDERR}" >&2
+  redact_output "${dsn}" <"${CAPTURE_STDOUT}"
+  redact_output "${dsn}" <"${CAPTURE_STDERR}" >&2
   rm -f "${CAPTURE_STDOUT}" "${CAPTURE_STDERR}"
   CAPTURE_STDOUT=""
   CAPTURE_STDERR=""
@@ -262,7 +204,7 @@ run_suite() {
 }
 
 if [[ -z "${DSN}" ]]; then
-  IMAGE="${TRAGGO_TEST_PG_IMAGE:-postgres:17}"
+  IMAGE="${TRAGGO_TEST_PG_IMAGE:-postgres:18}"
   PORT="${TRAGGO_TEST_PG_PORT:-55432}"
   CONTAINER="traggo-test-pg-$$"
   stage "==> Starting disposable ${IMAGE} on 127.0.0.1:${PORT} (trust auth)"
@@ -288,7 +230,7 @@ else
   stage "==> Reusing PostgreSQL server from TRAGGO_TEST_POSTGRES_DSN"
 fi
 
-# Require the connected server to actually be major 17 on both paths.
+# Require the connected server to actually be major 17 or 18 on both paths.
 check_server_version "${DSN}" || exit $?
 
 stage "==> Running regression/acceptance fixtures against SQLite AND PostgreSQL (required)"
